@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "starlette-profiler"
+version = "0.1.0"
+description = "Silk-style request and SQL profiling for Starlette and FastAPI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["starlette", "fastapi", "sqlalchemy", "sqlmodel", "profiler", "silk"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Debuggers",
+]
+dependencies = [
+  "starlette>=0.30",
+  "sqlalchemy>=2.0",
+  "jinja2>=3.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8",
+  "pytest-cov",
+  "httpx",
+  "aiosqlite",
+  "anyio",
+]
+dev = [
+  "ruff",
+  "ty",
+  "mypy",
+  "uvicorn",
+  "build",
+  "twine",
+]
+
+[project.urls]
+Source = "https://github.com/mmzeynalli/starlette-profiler"
+Issues = "https://github.com/mmzeynalli/starlette-profiler/issues"
+Changelog = "https://github.com/mmzeynalli/starlette-profiler/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/starlette_profiler"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "examples", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[project.scripts]
+starlette-profiler = "starlette_profiler.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  # Our own deprecations are errors; upstream's are not. A blanket
+  # `error::DeprecationWarning` turns any dependency's internal rename into a
+  # red build on a green codebase, which trains everyone to ignore CI.
+  "default",
+  "error::DeprecationWarning:starlette_profiler",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/starlette_profiler"]
+
+[tool.coverage.report]
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "\\.\\.\\.",
+]
+
+[tool.mypy]
+files = ["src/starlette_profiler"]
+ignore_missing_imports = true

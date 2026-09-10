@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% set nav = 'requests' %}
+{% block title %}{{ profile.method }} {{ profile.path }} &middot; Profiler{% endblock %}
+
+{% block content %}
+<a class="back" href="{{ urls.requests }}">&larr; All requests</a>
+
+<h1 class="headline">
+  <span class="pill method">{{ profile.method }}</span>
+  <span>{{ profile.path }}{% if profile.query_string %}<span
+    class="muted">?{{ profile.query_string }}</span>{% endif %}</span>
+</h1>
+{% if profile.route and profile.route != profile.path %}
+<p class="note">Route <a href="{{ urls.for_route(profile.method, profile.route) }}"><code>{{ profile.route }}</code></a></p>
+{% endif %}
+
+<section class="tiles">
+  <div class="tile">
+    <div class="value"><span class="pill {{ profile.status_class }}">{{ profile.status_code }}</span></div>
+    <div class="label">Status</div>
+  </div>
+  <div class="tile">
+    <div class="value">{{ "%.1f"|format(profile.duration_ms) }}<small>ms</small></div>
+    <div class="label">Total</div>
+  </div>
+  <div class="tile">
+    <div class="value">{{ "%.1f"|format(profile.query_ms) }}<small>ms</small></div>
+    <div class="label">In SQL</div>
+  </div>
+  <div class="tile">
+    <div class="value">{{ "%.1f"|format(profile.python_ms) }}<small>ms</small></div>
+    <div class="label">In Python</div>
+  </div>
+  <div class="tile">
+    <div class="value">{{ profile.query_count }}</div>
+    <div class="label">Queries</div>
+  </div>
+  <div class="tile{% if profile.duplicate_count %} alarm{% endif %}">
+    <div class="value">{{ profile.duplicate_count }}</div>
+    <div class="label">Duplicates</div>
+  </div>
+  {% if profile.error_count %}
+  <div class="tile alarm">
+    <div class="value">{{ profile.error_count }}</div>
+    <div class="label">SQL errors</div>
+  </div>
+  {% endif %}
+</section>
+
+{% if profile.duplicate_count %}
+<p class="banner">
+  {{ profile.duplicate_count }} statement(s) repeat SQL already run in this request.
+  That is the signature of an N+1 &mdash; the stack on the repeated statement
+  below names the line that issued it.
+</p>
+{% endif %}
+
+<h2>
+  Queries
+  <span class="muted small">
+    {{ groups|length }} distinct statement{{ '' if groups|length == 1 else 's' }},
+    {{ profile.query_count }} execution{{ '' if profile.query_count == 1 else 's' }}
+  </span>
+</h2>
+{% if groups %}
+<ol class="queries">
+  {% for g in groups %}
+  <li class="{% if g.is_duplicate %}dup{% endif %} {% if g.failed %}failed{% elif g.max_ms >= config.slow_query_ms %}slow{% endif %}">
+    <div class="qhead">
+      <span class="pill op">{{ g.operation }}</span>
+      {% if g.is_duplicate %}
+      <span class="pill warn" title="Executed {{ g.count }} times in this request">
+        &times;{{ g.count }}
+      </span>
+      {% endif %}
+      <span class="qtime">
+        {{ "%.2f"|format(g.total_ms) }} ms
+        {% if g.is_duplicate %}<span class="muted small">total &middot;
+          {{ "%.2f"|format(g.avg_ms) }} avg &middot;
+          {{ "%.2f"|format(g.max_ms) }} max</span>{% endif %}
+      </span>
+      {% if g.failed %}<span class="pill err">failed{% if g.failures > 1 %} &times;{{ g.failures }}{% endif %}</span>
+      {% elif g.max_ms >= config.slow_query_ms %}<span class="pill err">slow</span>{% endif %}
+    </div>
+    <pre class="sql">{{ g.sql }}</pre>
+    {% if g.error %}
+    <div class="qerror"><span class="muted">error</span> <code>{{ g.error }}</code></div>
+    {% endif %}
+    {% if g.params %}
+    <div class="params">
+      <span class="muted">params</span>
+      {% for p in g.params %}<code>{{ p }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+      {% if g.distinct_params > g.params|length %}<span class="muted small">and
+        {{ g.distinct_params - g.params|length }} more</span>{% endif %}
+    </div>
+    {% endif %}
+    {% if g.stack %}
+    <details>
+      <summary>Stack ({{ g.stack|length }} frames){% if g.failed %} &mdash; the failing call{% elif g.is_duplicate %} &mdash; where the first of {{ g.count }} was issued{% endif %}</summary>
+      <pre class="stack">{% for frame in g.stack %}{{ frame }}
+{% endfor %}</pre>
+    </details>
+    {% endif %}
+    {% if g.call_sites > 1 %}
+    <p class="note small">
+      Issued from {{ g.call_sites }} different call sites &mdash; the stack
+      above is the first{% if g.failed %} failing{% endif %} one.
+    </p>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty">No SQL ran during this request.</p>
+{% endif %}
+
+<div class="cols">
+  <div>
+    <h2>Request headers</h2>
+    {% if profile.request_headers %}
+    <table class="kv">
+      {% for k, v in profile.request_headers.items() %}
+      <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="empty">Not captured.</p>{% endif %}
+  </div>
+  <div>
+    <h2>Response headers</h2>
+    {% if profile.response_headers %}
+    <table class="kv">
+      {% for k, v in profile.response_headers.items() %}
+      <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="empty">Not captured.</p>{% endif %}
+  </div>
+</div>
+
+<p class="note">
+  Recorded {{ profile.recorded_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+  {% if profile.client %}from {{ profile.client }}{% endif %} &middot; id {{ profile.id }}
+</p>
+{% endblock %}

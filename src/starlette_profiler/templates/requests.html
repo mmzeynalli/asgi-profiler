@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% set nav = 'requests' %}
+{% block title %}Requests &middot; Profiler{% endblock %}
+
+{% block content %}
+<form class="filters" method="get" action="{{ urls.requests }}">
+  <input type="search" name="q" placeholder="Path contains&hellip;"
+         value="{{ filters.get('q', '') }}">
+  <select name="method">
+    <option value="">Any method</option>
+    {% for m in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE') %}
+    <option value="{{ m }}" {% if filters.get('method') == m %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">Any status</option>
+    <option value="ok"   {% if filters.get('status') == 'ok'   %}selected{% endif %}>2xx</option>
+    <option value="warn" {% if filters.get('status') == 'warn' %}selected{% endif %}>4xx</option>
+    <option value="err"  {% if filters.get('status') == 'err'  %}selected{% endif %}>5xx</option>
+  </select>
+  <input type="number" name="min_ms" min="0" step="10" placeholder="Slower than (ms)"
+         value="{{ filters.get('min_ms', '') }}">
+  <select name="order">
+    <option value="recent"  {% if order == 'recent'  %}selected{% endif %}>Most recent</option>
+    <option value="slowest" {% if order == 'slowest' %}selected{% endif %}>Slowest</option>
+    <option value="queries" {% if order == 'queries' %}selected{% endif %}>Most queries</option>
+    <option value="sql"     {% if order == 'sql'     %}selected{% endif %}>Most SQL time</option>
+  </select>
+  <select name="only">
+    <option value="">Everything</option>
+    <option value="duplicates" {% if filters.get('only') == 'duplicates' %}selected{% endif %}>N+1 only</option>
+    <option value="errors"     {% if filters.get('only') == 'errors'     %}selected{% endif %}>Failed SQL only</option>
+  </select>
+  {% if filters.get('route') %}
+  <input type="hidden" name="route" value="{{ filters.get('route') }}">
+  <span class="pill op" title="Filtered to one route">{{ filters.get('route') }}</span>
+  {% endif %}
+  <button type="submit" class="btn">Apply</button>
+  <a class="btn ghost" href="{{ urls.requests }}">Reset</a>
+</form>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Path</th>
+      <th class="num">Status</th>
+      <th class="num">Time</th>
+      <th class="num">SQL</th>
+      <th class="num">Queries</th>
+      <th class="num">When</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in profiles %}
+    <tr class="{% if p.duration_ms >= config.slow_request_ms %}slow{% endif %}">
+      <td><span class="pill method">{{ p.method }}</span></td>
+      <td class="path">
+        <a href="{{ urls.detail(p.id) }}">{{ p.path }}</a>{% if p.query_string %}<span
+          class="muted">?{{ p.query_string }}</span>{% endif %}
+        {% if p.duplicate_count %}
+        <span class="pill warn" title="{{ p.duplicate_count }} repeated statements — likely N+1">
+          N+1 &times;{{ p.duplicate_count }}
+        </span>
+        {% endif %}
+        {% if p.error_count %}
+        <span class="pill err" title="{{ p.error_count }} statement(s) raised">
+          SQL error &times;{{ p.error_count }}
+        </span>
+        {% endif %}
+        {% if p.route and p.route != p.path %}
+        <div class="muted small">{{ p.route }}</div>
+        {% endif %}
+      </td>
+      <td class="num"><span class="pill {{ p.status_class }}">{{ p.status_code }}</span></td>
+      <td class="num strong">{{ "%.1f"|format(p.duration_ms) }} ms</td>
+      <td class="num">{{ "%.1f"|format(p.query_ms) }} ms</td>
+      <td class="num">{{ p.query_count }}</td>
+      <td class="num muted">{{ p.recorded_at.strftime('%H:%M:%S') }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="7" class="empty">
+        {% if total %}
+          No requests match these filters &mdash; {{ total }} recorded in total.
+        {% else %}
+          Nothing recorded yet. Make a request to your application, then reload.
+          <span class="muted">(The profiler's own pages are never recorded.)</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if page.total %}
+<div class="pager">
+  <span class="note">
+    Showing {{ page.first_index }}&ndash;{{ page.last_index }} of {{ page.total }}
+    {% if active_filters %}matching{% endif %} request{{ '' if page.total == 1 else 's' }}
+    {% if active_filters %}<span class="muted">({{ total }} recorded)</span>{% endif %}
+  </span>
+  {% if page.pages > 1 %}
+  <nav class="pages">
+    {% if page.has_previous %}
+    <a class="btn ghost" href="{{ urls.page(filters, 1) }}">&laquo; First</a>
+    <a class="btn ghost" href="{{ urls.page(filters, page.number - 1) }}">&lsaquo; Prev</a>
+    {% endif %}
+    <span class="muted">Page {{ page.number }} of {{ page.pages }}</span>
+    {% if page.has_next %}
+    <a class="btn ghost" href="{{ urls.page(filters, page.number + 1) }}">Next &rsaquo;</a>
+    <a class="btn ghost" href="{{ urls.page(filters, page.pages) }}">Last &raquo;</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

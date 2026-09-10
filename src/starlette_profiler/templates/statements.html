@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% set nav = 'statements' %}
+{% block title %}Statements &middot; Profiler{% endblock %}
+
+{% block content %}
+<h1 class="headline">Statements by total time</h1>
+<p class="note">
+  Every recorded statement grouped by its SQL, across all requests. The
+  per-request view answers &ldquo;why is <em>this</em> endpoint slow&rdquo;;
+  this answers &ldquo;what is costing me across the whole application&rdquo;.
+  A statement that runs on several routes is often a serialiser or a
+  permission check nobody thinks about.
+</p>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Statement</th>
+      <th class="num">Runs</th>
+      <th class="num">Requests</th>
+      <th class="num">Per request</th>
+      <th class="num">Total</th>
+      <th class="num">Avg</th>
+      <th class="num">Max</th>
+      <th>Routes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="{% if row.max_ms >= config.slow_query_ms %}slow{% endif %}">
+      <td class="stmt">
+        <span class="pill op">{{ row.operation }}</span>
+        {% if row.failures %}
+        <span class="pill err" title="{{ row.failures }} execution(s) raised">
+          failed &times;{{ row.failures }}
+        </span>
+        {% endif %}
+        <pre class="sql">{{ row.sql }}</pre>
+      </td>
+      <td class="num strong">{{ row.count }}</td>
+      <td class="num">{{ row.requests }}</td>
+      <td class="num {% if row.per_request >= 2 %}alarm-text{% endif %}"
+          title="Executions per request that ran it. Well above 1 is an N+1.">
+        {{ "%.1f"|format(row.per_request) }}
+      </td>
+      <td class="num strong">{{ "%.1f"|format(row.total_ms) }} ms</td>
+      <td class="num">{{ "%.2f"|format(row.avg_ms) }} ms</td>
+      <td class="num">{{ "%.2f"|format(row.max_ms) }} ms</td>
+      <td class="path">
+        <a href="{{ urls.for_route(row.sample_method, row.sample_route) }}">{{ row.sample_route }}</a>
+        {% if row.route_count > 1 %}
+        <span class="muted small">and {{ row.route_count - 1 }} more</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="empty">
+      Nothing recorded yet, or no SQL ran.
+    </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

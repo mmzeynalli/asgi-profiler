@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Profiler{% endblock %}</title>
+  <link rel="stylesheet" href="{{ urls.css }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <a href="{{ urls.requests }}">Profiler</a>
+    </div>
+    <nav>
+      <a href="{{ urls.requests }}"
+         class="{% if nav == 'requests' %}active{% endif %}">Requests</a>
+      <a href="{{ urls.summary }}"
+         class="{% if nav == 'summary' %}active{% endif %}">Summary</a>
+      <a href="{{ urls.statements }}"
+         class="{% if nav == 'statements' %}active{% endif %}">Statements</a>
+    </nav>
+    <div class="spacer"></div>
+    <span class="counter">{{ storage_size }} recorded</span>
+    <form method="post" action="{{ urls.clear }}">
+      <button type="submit" class="btn danger">Clear</button>
+    </form>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    Newest first, capped at {{ config.max_requests }} requests. This page has no
+    authentication of its own &mdash; do not expose it.
+  </footer>
+</body>
+</html>

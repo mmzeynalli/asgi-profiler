@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set nav = 'summary' %}
+{% block title %}Summary &middot; Profiler{% endblock %}
+
+{% block content %}
+<h1 class="headline">Summary by route</h1>
+<p class="note">
+  Every recorded request grouped by method and route, heaviest total time
+  first. Parameterised routes are grouped by their pattern, so
+  <code>/users/1</code> and <code>/users/2</code> are one row. Use this to find
+  which endpoint is costing you, then click through to its requests.
+  Percentiles rather than the average, which a single outlier ruins and which
+  tells you nothing about what most callers actually experienced.
+</p>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Route</th>
+      <th class="num">Calls</th>
+      <th class="num">p50</th>
+      <th class="num">p95</th>
+      <th class="num">p99</th>
+      <th class="num">Max</th>
+      <th class="num">Total</th>
+      <th class="num">Avg queries</th>
+      <th class="num">Duplicates</th>
+      <th class="num">SQL errors</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="{% if row.p95_ms >= config.slow_request_ms %}slow{% endif %}">
+      <td><span class="pill method">{{ row.method }}</span></td>
+      <td class="path">
+        <a href="{{ urls.for_route(row.method, row.path) }}">{{ row.path }}</a>
+      </td>
+      <td class="num">{{ row.count }}</td>
+      <td class="num strong">{{ "%.1f"|format(row.p50_ms) }} ms</td>
+      <td class="num">{{ "%.1f"|format(row.p95_ms) }} ms</td>
+      <td class="num">{{ "%.1f"|format(row.p99_ms) }} ms</td>
+      <td class="num">{{ "%.1f"|format(row.max_ms) }} ms</td>
+      <td class="num">{{ "%.1f"|format(row.total_ms) }} ms</td>
+      <td class="num">{{ "%.1f"|format(row.avg_queries) }}</td>
+      <td class="num">
+        {% if row.total_duplicates %}
+        <span class="pill warn">{{ row.total_duplicates }}</span>
+        {% else %}0{% endif %}
+      </td>
+      <td class="num">
+        {% if row.total_errors %}
+        <span class="pill err">{{ row.total_errors }}</span>
+        {% else %}0{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="11" class="empty">Nothing recorded yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

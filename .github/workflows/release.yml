@@ -1,0 +1,64 @@
+name: Release
+
+# Publishes to PyPI when a v* tag is pushed. Uses Trusted Publishing, so no
+# API token is stored anywhere: configure the publisher once at
+# https://pypi.org/manage/project/starlette-profiler/settings/publishing/
+# with owner `mmzeynalli`, repository `starlette-profiler`, workflow
+# `release.yml` and environment `pypi`.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[test]" fastapi
+      - run: pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - name: The tag must match the packaged version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(ls dist/*.tar.gz | sed -E 's/.*-([0-9][^-]*)\.tar\.gz/\1/')
+          echo "tag=$TAG packaged=$VERSION"
+          test "$TAG" = "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
