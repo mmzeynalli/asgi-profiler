@@ -27,7 +27,7 @@ from fastapi import FastAPI
 from starlette_profiler import install
 
 app = FastAPI()
-install(app)          # viewer at /profiler
+install(app)  # viewer at /profiler
 ```
 
 That is the whole integration. No settings module, no database table, no
@@ -169,21 +169,21 @@ def test_the_dashboard_has_no_n_plus_one(client):
 ## Configuration
 
 ```python
-from starlette_profiler import ProfilerConfig, install
+from starlette_profiler import install
 
 install(
     app,
-    mount_path="/_perf",         # anywhere; every link is relative to the mount
+    mount_path="/_perf",  # anywhere; every link is relative to the mount
     max_requests=1000,
     exclude_paths=["/healthz"],  # matched on segment boundaries
-    capture_stacks=True,         # the per-query stacks; costs a little per query
+    capture_stacks=True,  # the per-query stacks; costs a little per query
     stack_depth=8,
     slow_request_ms=500,
     slow_query_ms=50,
     capture_headers=True,
-    response_header="x-profiler-id",   # None to add nothing
+    response_header="x-profiler-id",  # None to add nothing
     page_size=50,
-    statement_limit=100,         # rows on the Statements page
+    statement_limit=100,  # rows on the Statements page
     authorize=lambda request: request.headers.get("x-key") == "...",
 )
 ```
@@ -222,6 +222,7 @@ better:
 ```python
 from starlette_profiler import BaseStorage
 
+
 class RedisStorage(BaseStorage):
     def add(self, profile): ...
     def get(self, profile_id): ...
@@ -249,9 +250,11 @@ the file is opened read-only.
 ```python
 install(app, authorize=lambda request: request.user.is_staff)
 
+
 # async is fine too -- and any realistic guard is async
 async def only_staff(request):
     return await is_staff(request.user)
+
 
 install(app, authorize=only_staff)
 ```

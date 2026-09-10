@@ -1,65 +1,55 @@
+<!-- markdownlint-disable MD024 -->
+
 # Changelog
 
-All notable changes are documented here. This project follows
-[Semantic Versioning](https://semver.org/).
+All notable changes to `starlette-profiler` are documented here. The format is
+based on [Keep a Changelog](https://keepachangelog.com/) and this project
+follows [Semantic Versioning](https://semver.org/).
 
 ## [0.1.0] - Unreleased
 
-First release.
+First release. Silk-style request and SQL profiling for **Starlette** and
+**FastAPI**, with **SQLAlchemy** and **SQLModel**. `install(app)` is the whole
+integration — no settings module, no database table, no migration.
 
-Silk-style request and SQL profiling for Starlette and FastAPI, with
-SQLAlchemy and SQLModel. `install(app)` is the whole integration.
+### Added
 
-### Recording
-
-- Pure-ASGI middleware records every HTTP request: method, path, matched route
-  pattern, status, wall time, and the SQL it ran. `BaseHTTPMiddleware` would
-  run the app in a separate task and break the contextvar that query
-  attribution depends on.
-- SQL is captured through SQLAlchemy's `before_cursor_execute`,
-  `after_cursor_execute` and `handle_error` events attached to the `Engine`
-  **class**, so every engine in the process is covered and SQLModel needs no
-  special support. Async engines included. Statements that raise are recorded
-  with their error.
-- Each statement carries the application frames that issued it, walked outward
-  from the query and across the greenlet boundary that SQLAlchemy's async
-  support puts in the way.
-- Attribution holds under concurrency: the suite fires concurrent requests
-  with different query counts and asserts none of them bleed.
-- Route patterns come from the framework where it offers one and are recovered
-  by replaying the router where it does not, so `/users/1` and `/users/2`
-  aggregate as `/users/{user_id}` even under a mount.
-
-### Viewing
-
-- **Requests** — filterable and paginated, with `N+1 xN` and `SQL error`
+- `install(app)` — adds a pure-ASGI middleware and mounts the viewer. Returns a
+  `Profiler` handle with `slowest()`, `search()`, `summary()`, `statements()`
+  and `close()`.
+- SQL capture through SQLAlchemy's `before_cursor_execute`,
+  `after_cursor_execute` and `handle_error` events, attached to the `Engine`
+  class — so every engine in the process is covered, SQLModel needs no special
+  support, and async engines work unchanged.
+- Per-query application stacks, walked across the greenlet boundary that
+  SQLAlchemy's async support puts between the query and your code.
+- Statements that raise are recorded with their error and filterable.
+- Route-pattern grouping: `/users/1` and `/users/2` aggregate as
+  `/users/{user_id}`, recovered by replaying the router where the framework
+  does not expose it, and correct under mounts and typed converters.
+- **Requests** page — filterable and paginated, with `N+1 ×n` and `SQL error`
   badges.
-- **Request detail** — timing breakdown, then the statements, with repeated
-  ones collapsed into a single row carrying a `xN` badge, the spread of their
-  timings, a sample of the parameters, and one copy of the stack. A 500-row
-  N+1 is one line to read rather than 500 to scroll.
-- **Summary** — grouped by route, with p50/p95/p99 rather than an average.
-- **Statements** — every statement aggregated across all requests, answering
-  what costs you application-wide rather than on one endpoint.
-- JSON for every page, so a test can fail a build when an endpoint regresses
-  to an N+1.
-- `X-Profiler-Id` on every response, linking a slow response to its trace.
-- The viewer mounts anywhere and works behind a proxy prefix. It has no
-  authentication of its own; pass `authorize=` (sync or async).
-
-### Storage
-
-- `MemoryStorage` — a bounded ring buffer, the zero-config default.
-- `SQLiteStorage` — survives restarts and is shared by every worker. Writes go
-  through a background thread so no `fsync` or lock wait lands on the event
-  loop; reads flush first.
-- `Storage` is a Protocol and `BaseStorage` supplies searching, paging,
+- **Request detail** page — repeated statements collapse into one row with a
+  `×N` badge, the spread of their timings, a sample of the parameters, and one
+  copy of the stack that issued them.
+- **Summary** page — grouped by route, with p50/p95/p99 rather than an average.
+- **Statements** page — every statement aggregated across all requests.
+- JSON for every page (`/requests.json`, `/request/<id>.json`,
+  `/summary.json`, `/statements.json`), so a test can fail a build when an
+  endpoint regresses to an N+1.
+- `X-Profiler-Id` response header, linking a slow response to its trace.
+- `MemoryStorage` (default) and `SQLiteStorage`, the latter shared across
+  `uvicorn` workers and written from a background thread so no `fsync` or lock
+  wait lands on the event loop.
+- `Storage` protocol plus a `BaseStorage` that supplies searching, paging,
   summarising and statement aggregation, so a custom backend needs five
   methods.
-- `python -m starlette_profiler profiler.db` browses a capture file offline,
-  read-only.
+- `python -m starlette_profiler profiler.db` — browse a capture file offline,
+  read-only, with no application.
+- `authorize=` hook, sync or async. `POST /clear` rejects cross-site requests.
+- `py.typed`, checked in CI with both `mypy` and `ty`, on Python 3.10–3.13.
 
-### Known limits
+### Known limitations
 
 - No Python-side profiling yet: when an endpoint is slow and the SQL is not,
   "time in Python" is a single number with nothing behind it.
