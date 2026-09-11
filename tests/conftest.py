@@ -20,4 +20,4 @@ def _reset_instrumentation():
 
 @pytest.fixture
 def anyio_backend():
-    return 'asyncio'
+    return "asyncio"

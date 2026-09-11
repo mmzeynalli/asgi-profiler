@@ -28,17 +28,17 @@ from asgi_profiler import (
 
 
 async def endpoint(request):
-    return PlainTextResponse('ok')
+    return PlainTextResponse("ok")
 
 
 def app_with(**kwargs):
-    app = Starlette(routes=[Route('/', endpoint), Route('/x/{n}', endpoint)])
+    app = Starlette(routes=[Route("/", endpoint), Route("/x/{n}", endpoint)])
     return app, install(app, **kwargs)
 
 
 def make(idx: int, **kwargs) -> Profile:
-    kwargs.setdefault('path', f'/p{idx}')
-    profile = Profile(id=f'{idx:012d}', method='GET', **kwargs)
+    kwargs.setdefault("path", f"/p{idx}")
+    profile = Profile(id=f"{idx:012d}", method="GET", **kwargs)
     profile.finalise()
     return profile
 
@@ -51,10 +51,10 @@ def test_an_explicit_storage_is_actually_used():
 
     assert profiler.storage is mine
     with TestClient(app) as client:
-        client.get('/')
+        client.get("/")
 
     assert mine.count() == 1
-    assert profiler.profiles[0].path == '/'
+    assert profiler.profiles[0].path == "/"
 
 
 def test_a_falsy_custom_storage_is_used():
@@ -87,7 +87,7 @@ def test_a_falsy_custom_storage_is_used():
     app, profiler = app_with(storage=mine)
     assert profiler.storage is mine
     with TestClient(app) as client:
-        client.get('/')
+        client.get("/")
     assert mine.count() == 1
 
 
@@ -100,103 +100,134 @@ def test_an_async_authorize_can_deny():
 
     app, _ = app_with(authorize=deny)
     with TestClient(app) as client:
-        assert client.get('/profiler/').status_code == 403
+        assert client.get("/profiler/").status_code == 403
 
 
 def test_an_async_authorize_can_allow():
     async def allow(request):
-        return request.headers.get('x-key') == 'letmein'
+        return request.headers.get("x-key") == "letmein"
 
     app, _ = app_with(authorize=allow)
     with TestClient(app) as client:
-        assert client.get('/profiler/').status_code == 403
-        page = client.get('/profiler/', headers={'x-key': 'letmein'})
+        assert client.get("/profiler/").status_code == 403
+        page = client.get("/profiler/", headers={"x-key": "letmein"})
         assert page.status_code == 200
 
 
 def test_a_sync_authorize_still_works():
     app, _ = app_with(authorize=lambda request: False)
     with TestClient(app) as client:
-        assert client.get('/profiler/').status_code == 403
+        assert client.get("/profiler/").status_code == 403
 
 
 def test_authorize_guards_every_viewer_page():
     app, _ = app_with(authorize=lambda request: False)
     with TestClient(app) as client:
         for path in (
-            '/profiler/',
-            '/profiler/summary',
-            '/profiler/statements',
-            '/profiler/requests.json',
-            '/profiler/summary.json',
-            '/profiler/statements.json',
-            '/profiler/static/profiler.css',
+            "/profiler/",
+            "/profiler/summary",
+            "/profiler/statements",
+            "/profiler/requests.json",
+            "/profiler/summary.json",
+            "/profiler/statements.json",
+            "/profiler/static/profiler.css",
         ):
             assert client.get(path).status_code == 403, path
-        assert client.post('/profiler/clear').status_code == 403
+        assert client.post("/profiler/clear").status_code == 403
 
 
 # ------------------------------------------------- install() side effects
 def test_install_does_not_mutate_the_config_it_is_given():
     shared = ProfilerConfig()
-    first = Starlette(routes=[Route('/', endpoint)])
-    install(first, config=shared, mount_path='/one', max_requests=10)
+    first = Starlette(routes=[Route("/", endpoint)])
+    install(first, config=shared, mount_path="/one", max_requests=10)
 
-    assert shared.mount_path == '/profiler'
+    assert shared.mount_path == "/profiler"
     assert shared.max_requests == 500
 
-    second = Starlette(routes=[Route('/', endpoint)])
+    second = Starlette(routes=[Route("/", endpoint)])
     handle = install(second, config=shared)
-    assert handle.config.mount_path == '/profiler'
+    assert handle.config.mount_path == "/profiler"
 
 
 def test_installing_twice_is_refused():
-    app = Starlette(routes=[Route('/', endpoint)])
+    app = Starlette(routes=[Route("/", endpoint)])
     install(app)
-    with pytest.raises(RuntimeError, match='already installed'):
+    with pytest.raises(RuntimeError, match="already installed"):
         install(app)
 
 
 # ------------------------------------------------------- py.typed is real
 def test_the_package_type_checks():
     """Shipping py.typed while failing to type-check exports the errors."""
-    if not _available('ty'):
-        pytest.skip('ty not installed')
-    result = subprocess.run(['ty', 'check', 'src/asgi_profiler'], capture_output=True, text=True)
+    if not _available("ty"):
+        pytest.skip("ty not installed")
+    result = subprocess.run(["ty", "check", "src/asgi_profiler"], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
 def _available(name: str) -> bool:
     return (
-        subprocess.run([sys.executable, '-c', f'import {name}'], capture_output=True).returncode
+        subprocess.run([sys.executable, "-c", f"import {name}"], capture_output=True).returncode
         == 0
     )
 
 
 # ------------------------------------------------- SQLite under real load
+def _vdbe_steps_per_add(path, cap, rounds=200):
+    """Virtual-machine instructions SQLite executes for one steady-state add().
+
+    `set_progress_handler(fn, 1)` fires `fn` once per VDBE instruction, so this
+    counts the work done rather than the time it took. That distinction is the
+    point: the amount of work is a property of the query plan and is identical
+    on every machine, while the time is a property of the machine.
+    """
+    store = SQLiteStorage(path, max_requests=cap, background=False)
+    try:
+        for i in range(cap + 100):
+            store.add(make(i))
+        assert store.count() == cap, "the cap must stay exact"
+
+        steps = 0
+
+        def count() -> int:
+            nonlocal steps
+            steps += 1
+            return 0
+
+        # Reaching for `_conn` on purpose: there is no public way to ask "how
+        # much work did that do", and the answer is what the test is about.
+        store._conn.set_progress_handler(count, 1)
+        try:
+            for i in range(rounds):
+                store.add(make(10_000_000 + i))
+        finally:
+            store._conn.set_progress_handler(None, 0)
+        return steps / rounds
+    finally:
+        store.close()
+
+
 def test_sqlite_add_does_not_scan_the_retention_window(tmp_path):
     """The trim must cost the overshoot, not the whole cap.
 
-    A per-insert `ORDER BY seq DESC LIMIT max_requests` made `add()` 13x more
-    expensive at a 20k cap than at 500 -- paid synchronously, on the loop.
-    """
-    timings = {}
-    for cap in (500, 20_000):
-        store = SQLiteStorage(tmp_path / f'cap{cap}.db', max_requests=cap, background=False)
-        try:
-            for i in range(cap + 100):
-                store.add(make(i))
-            assert store.count() == cap, 'the cap must stay exact'
-            start = time.perf_counter()
-            for i in range(200):
-                store.add(make(10_000_000 + i))
-            timings[cap] = (time.perf_counter() - start) / 200
-        finally:
-            store.close()
+    A per-insert `ORDER BY seq DESC LIMIT max_requests` made `add()` walk the
+    entire retention window on every single insert, synchronously, on the loop.
 
-    assert timings[20_000] < timings[500] * 4, (
-        f'add() scales with max_requests: {timings[500] * 1e6:.0f}us at 500 vs '
-        f'{timings[20_000] * 1e6:.0f}us at 20000'
+    This counts VDBE instructions rather than microseconds. An earlier version
+    asserted on elapsed time and failed in CI at a 4.9x ratio -- not because
+    the trim regressed, but because a 20k-row database does more I/O per insert
+    than a 500-row one whatever the query plan is, and a shared runner
+    exaggerates that. Measured as work: 253 steps per add at both caps, dead
+    flat. Restore the old trim and it is 4707 against 180207, a 38x ratio. The
+    signal was never in the timing.
+    """
+    per_add = {cap: _vdbe_steps_per_add(tmp_path / f"cap{cap}.db", cap) for cap in (500, 20_000)}
+    ratio = per_add[20_000] / per_add[500]
+    # Generous: the real figure is 1.00 and the bug is 38.
+    assert ratio < 1.5, (
+        f"add() scales with max_requests: {per_add[500]:.0f} VDBE steps at a "
+        f"500 cap vs {per_add[20_000]:.0f} at 20000 ({ratio:.1f}x)"
     )
 
 
@@ -213,7 +244,7 @@ def test_background_writes_keep_the_tail_off_the_caller(tmp_path):
     def tail_us(store, offset):
         for i in range(600):  # fill past the cap so the trim is live
             store.add(make(offset + i))
-        if hasattr(store, 'flush'):
+        if hasattr(store, "flush"):
             store.flush()
         timings = []
         for i in range(400):
@@ -224,30 +255,30 @@ def test_background_writes_keep_the_tail_off_the_caller(tmp_path):
         timings.sort()
         return timings[int(0.99 * len(timings))]
 
-    with SQLiteStorage(tmp_path / 'sync.db', max_requests=500, background=False) as sync:
+    with SQLiteStorage(tmp_path / "sync.db", max_requests=500, background=False) as sync:
         inline_p99 = tail_us(sync, 0)
 
-    with SQLiteStorage(tmp_path / 'bg.db', max_requests=500) as background:
+    with SQLiteStorage(tmp_path / "bg.db", max_requests=500) as background:
         queued_p99 = tail_us(background, 50_000_000)
         background.flush()
-        assert background.count() == 500, 'the cap still holds'
+        assert background.count() == 500, "the cap still holds"
 
     assert queued_p99 < inline_p99 / 3, (
-        f'p99 enqueue {queued_p99:.0f}us vs p99 inline write {inline_p99:.0f}us '
-        '-- the background writer is not keeping the tail off the caller'
+        f"p99 enqueue {queued_p99:.0f}us vs p99 inline write {inline_p99:.0f}us "
+        "-- the background writer is not keeping the tail off the caller"
     )
 
 
 def test_reads_flush_pending_writes(tmp_path):
     """Enqueuing must never mean a stale page."""
-    store = SQLiteStorage(tmp_path / 'flush.db')
+    store = SQLiteStorage(tmp_path / "flush.db")
     try:
         for i in range(20):
             store.add(make(i))
         # no explicit flush: every read path has to do it
         assert store.count() == 20
         assert len(store.list()) == 20
-        assert store.get('000000000005') is not None
+        assert store.get("000000000005") is not None
         assert store.search.__self__ is store
         assert store.search(_filters()).total == 20
         assert store.summarise()
@@ -262,23 +293,23 @@ def _filters():
 
 
 def test_sqlite_can_be_used_as_a_context_manager(tmp_path):
-    with SQLiteStorage(tmp_path / 'ctx.db') as store:
+    with SQLiteStorage(tmp_path / "ctx.db") as store:
         store.add(make(1))
         assert store.count() == 1
     assert store._closed
 
 
 def test_profiler_close_releases_the_backend(tmp_path):
-    app = Starlette(routes=[Route('/', endpoint)])
-    store = SQLiteStorage(tmp_path / 'closed.db')
+    app = Starlette(routes=[Route("/", endpoint)])
+    store = SQLiteStorage(tmp_path / "closed.db")
     profiler = install(app, storage=store)
     with TestClient(app) as client:
-        client.get('/')
+        client.get("/")
     profiler.close()
     assert store._closed
     # and close() is safe on a backend that has none
-    other = Starlette(routes=[Route('/', endpoint)])
-    install(other, mount_path='/p2').close()
+    other = Starlette(routes=[Route("/", endpoint)])
+    install(other, mount_path="/p2").close()
 
 
 # ------------------------------------------------------ schema versioning
@@ -286,18 +317,18 @@ def test_an_old_schema_is_rebuilt_not_crashed(tmp_path):
     """A stale profiler.db must not raise from inside add(), after the 200."""
     import sqlite3
 
-    path = tmp_path / 'old.db'
+    path = tmp_path / "old.db"
     legacy = sqlite3.connect(path)
-    legacy.execute('CREATE TABLE profiles (id TEXT, whatever TEXT)')
+    legacy.execute("CREATE TABLE profiles (id TEXT, whatever TEXT)")
     legacy.execute("INSERT INTO profiles VALUES ('x', 'y')")
-    legacy.execute('PRAGMA user_version = 0')
+    legacy.execute("PRAGMA user_version = 0")
     legacy.commit()
     legacy.close()
 
     with SQLiteStorage(path, background=False) as store:
         store.add(make(1))
         assert store.count() == 1
-        assert store.get('000000000001') is not None
+        assert store.get("000000000001") is not None
 
 
 def test_the_schema_version_is_stamped(tmp_path):
@@ -305,11 +336,11 @@ def test_the_schema_version_is_stamped(tmp_path):
 
     from asgi_profiler.storage import SCHEMA_VERSION
 
-    path = tmp_path / 'stamped.db'
+    path = tmp_path / "stamped.db"
     with SQLiteStorage(path, background=False):
         pass
     conn = sqlite3.connect(path)
-    assert conn.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     conn.close()
 
 
@@ -318,31 +349,31 @@ def test_a_huge_statement_is_truncated():
     from asgi_profiler.instrument import _normalise
     from asgi_profiler.models import MAX_SQL_CHARS
 
-    bulk = 'INSERT INTO t VALUES ' + ','.join(f'({i})' for i in range(20_000))
+    bulk = "INSERT INTO t VALUES " + ",".join(f"({i})" for i in range(20_000))
     stored = _normalise(bulk)
 
     assert len(stored) < MAX_SQL_CHARS + 100
-    assert 'truncated' in stored
-    assert str(len(' '.join(bulk.split()))) in stored
+    assert "truncated" in stored
+    assert str(len(" ".join(bulk.split()))) in stored
 
 
 def test_a_normal_statement_is_untouched():
     from asgi_profiler.instrument import _normalise
 
-    assert _normalise('SELECT  a,\n  b FROM t') == 'SELECT a, b FROM t'
+    assert _normalise("SELECT  a,\n  b FROM t") == "SELECT a, b FROM t"
 
 
 def test_a_backend_that_raises_does_not_break_the_request(caplog):
     class Broken(MemoryStorage):
         def add(self, profile):
-            raise OSError('disk full')
+            raise OSError("disk full")
 
-    app = Starlette(routes=[Route('/', endpoint)])
+    app = Starlette(routes=[Route("/", endpoint)])
     install(app, storage=Broken())
 
     with TestClient(app) as client:
-        assert client.get('/').status_code == 200
-    assert any('Could not record' in r.message for r in caplog.records)
+        assert client.get("/").status_code == 200
+    assert any("Could not record" in r.message for r in caplog.records)
 
 
 def test_the_query_list_is_capped_in_memory_not_unbounded():
@@ -350,7 +381,7 @@ def test_the_query_list_is_capped_in_memory_not_unbounded():
     store = MemoryStorage(max_requests=2)
     for i in range(5):
         profile = make(i)
-        profile.queries = [Query(sql='SELECT 1', params='()', duration_ms=0.1) for _ in range(100)]
+        profile.queries = [Query(sql="SELECT 1", params="()", duration_ms=0.1) for _ in range(100)]
         profile.finalise()
         store.add(profile)
     assert store.count() == 2

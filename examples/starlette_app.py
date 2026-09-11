@@ -21,28 +21,28 @@ class Base(DeclarativeBase):
 
 
 class Author(Base):
-    __tablename__ = 'author'
+    __tablename__ = "author"
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
 
 class Book(Base):
-    __tablename__ = 'book'
+    __tablename__ = "book"
     id = Column(Integer, primary_key=True)
     title = Column(String)
-    author_id = Column(Integer, ForeignKey('author.id'))
-    author = relationship('Author', lazy='select')
+    author_id = Column(Integer, ForeignKey("author.id"))
+    author = relationship("Author", lazy="select")
 
 
-engine = create_engine('sqlite:///example.db', connect_args={'check_same_thread': False})
+engine = create_engine("sqlite:///example.db", connect_args={"check_same_thread": False})
 Session = sessionmaker(bind=engine)
 Base.metadata.create_all(engine)
 
 with Session() as session:
     if not session.scalars(select(Book)).first():
         for i in range(1, 26):
-            session.add(Author(id=i, name=f'Author {i}'))
-            session.add(Book(id=i, title=f'Book {i}', author_id=i))
+            session.add(Author(id=i, name=f"Author {i}"))
+            session.add(Book(id=i, title=f"Book {i}", author_id=i))
         session.commit()
 
 
@@ -50,7 +50,7 @@ async def books(request):
     """One query, however many rows."""
     with Session() as session:
         rows = session.scalars(select(Book)).all()
-        return JSONResponse([{'id': b.id, 'title': b.title} for b in rows])
+        return JSONResponse([{"id": b.id, "title": b.title} for b in rows])
 
 
 async def books_n1(request):
@@ -58,21 +58,21 @@ async def books_n1(request):
     with Session() as session:
         out = []
         for book in session.scalars(select(Book)):
-            out.append({'title': book.title, 'author': book.author.name})
+            out.append({"title": book.title, "author": book.author.name})
         return JSONResponse(out)
 
 
 app = Starlette(
     routes=[
-        Route('/books', books),
-        Route('/books-n1', books_n1),
+        Route("/books", books),
+        Route("/books-n1", books_n1),
     ]
 )
 
 install(app)  # viewer at /profiler
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host='127.0.0.1', port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

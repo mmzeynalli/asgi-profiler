@@ -23,22 +23,22 @@ def main(argv: list[str] | None = None) -> int:
     # argparse, `python -m asgi_profiler` would print `usage: __main__.py`,
     # because that is what `-m` puts in argv[0]; hard-coded, the console
     # script would print a command the user did not type.
-    if Path(sys.argv[0]).stem == '__main__':
-        prog = 'python -m asgi_profiler'
+    if Path(sys.argv[0]).stem == "__main__":
+        prog = "python -m asgi_profiler"
     else:
-        prog = 'asgi-profiler'
+        prog = "asgi-profiler"
     parser = argparse.ArgumentParser(
         prog=prog,
-        description='Browse an asgi-profiler SQLite capture.',
+        description="Browse an asgi-profiler SQLite capture.",
     )
-    parser.add_argument('database', type=Path, help='path to a profiler.db file')
-    parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--port', type=int, default=8080)
-    parser.add_argument('--page-size', type=int, default=50, help='rows per page (default: 50)')
+    parser.add_argument("database", type=Path, help="path to a profiler.db file")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--page-size", type=int, default=50, help="rows per page (default: 50)")
     args = parser.parse_args(argv)
 
     if not args.database.exists():
-        parser.error(f'no such file: {args.database}')
+        parser.error(f"no such file: {args.database}")
 
     # The capture is checked before the server dependency, so a bad file is
     # reported as a bad file rather than as a missing uvicorn.
@@ -54,19 +54,19 @@ def main(argv: list[str] | None = None) -> int:
         import uvicorn
     except ImportError:  # pragma: no cover - depends on the environment
         storage.close()
-        parser.error('uvicorn is required to serve the viewer: pip install uvicorn')
+        parser.error("uvicorn is required to serve the viewer: pip install uvicorn")
 
-    config = ProfilerConfig(mount_path='', page_size=args.page_size)
+    config = ProfilerConfig(mount_path="", page_size=args.page_size)
     app = build_viewer(storage, config)
 
-    print(f'{storage.count()} requests in {args.database}')
-    print(f'viewer on http://{args.host}:{args.port}/')
+    print(f"{storage.count()} requests in {args.database}")
+    print(f"viewer on http://{args.host}:{args.port}/")
     try:
-        uvicorn.run(app, host=args.host, port=args.port, log_level='warning')
+        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     finally:
         storage.close()
     return 0
 
 
-if __name__ == '__main__':  # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

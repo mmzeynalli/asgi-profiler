@@ -33,8 +33,8 @@ class Query:
 
     @property
     def operation(self) -> str:
-        head = self.sql.lstrip().split(' ', 1)[0].upper()
-        return head if head.isalpha() else 'SQL'
+        head = self.sql.lstrip().split(" ", 1)[0].upper()
+        return head if head.isalpha() else "SQL"
 
 
 @dataclass(slots=True)
@@ -75,7 +75,7 @@ class QueryGroup:
 
     @property
     def operation(self) -> str:
-        return self.first.operation if self.first else 'SQL'
+        return self.first.operation if self.first else "SQL"
 
     @property
     def _representative(self) -> Query | None:
@@ -100,7 +100,7 @@ class QueryGroup:
 
 
 #: Parameter renderings that carry no information and are not worth the row.
-_EMPTY_PARAMS = ('()', '{}', '[]', '', 'None')
+_EMPTY_PARAMS = ("()", "{}", "[]", "", "None")
 
 #: How many distinct parameter renderings and positions to keep per group.
 _PARAM_SAMPLE = 5
@@ -157,14 +157,14 @@ class Profile:
     path: str
     #: The matched route *pattern* -- ``/users/{user_id}`` rather than
     #: ``/users/42``. Empty when routing did not expose one.
-    route: str = ''
-    query_string: str = ''
+    route: str = ""
+    query_string: str = ""
     status_code: int = 0
     duration_ms: float = 0.0
     recorded_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     request_headers: dict[str, str] = field(default_factory=dict)
     response_headers: dict[str, str] = field(default_factory=dict)
-    client: str = ''
+    client: str = ""
     queries: list[Query] = field(default_factory=list)
 
     # -- derived, filled by finalise() ------------------------------------
@@ -206,17 +206,17 @@ class Profile:
 
     @property
     def full_path(self) -> str:
-        return f'{self.path}?{self.query_string}' if self.query_string else self.path
+        return f"{self.path}?{self.query_string}" if self.query_string else self.path
 
     @property
     def status_class(self) -> str:
         if self.status_code >= 500:
-            return 'err'
+            return "err"
         if self.status_code >= 400:
-            return 'warn'
+            return "warn"
         if self.status_code >= 300:
-            return 'info'
-        return 'ok'
+            return "info"
+        return "ok"
 
     def as_dict(self, *, with_queries: bool = True) -> dict[str, object]:
         """A JSON-serialisable view, for the viewer's JSON endpoints.
@@ -226,33 +226,33 @@ class Profile:
         bug report.
         """
         data: dict[str, object] = {
-            'id': self.id,
-            'method': self.method,
-            'path': self.path,
-            'route': self.route,
-            'group': self.group,
-            'query_string': self.query_string,
-            'status_code': self.status_code,
-            'duration_ms': round(self.duration_ms, 3),
-            'query_ms': round(self.query_ms, 3),
-            'python_ms': round(self.python_ms, 3),
-            'query_count': self.query_count,
-            'duplicate_count': self.duplicate_count,
-            'error_count': self.error_count,
-            'recorded_at': self.recorded_at.isoformat(),
-            'client': self.client,
+            "id": self.id,
+            "method": self.method,
+            "path": self.path,
+            "route": self.route,
+            "group": self.group,
+            "query_string": self.query_string,
+            "status_code": self.status_code,
+            "duration_ms": round(self.duration_ms, 3),
+            "query_ms": round(self.query_ms, 3),
+            "python_ms": round(self.python_ms, 3),
+            "query_count": self.query_count,
+            "duplicate_count": self.duplicate_count,
+            "error_count": self.error_count,
+            "recorded_at": self.recorded_at.isoformat(),
+            "client": self.client,
         }
         if with_queries:
-            data['request_headers'] = self.request_headers
-            data['response_headers'] = self.response_headers
-            data['queries'] = [
+            data["request_headers"] = self.request_headers
+            data["response_headers"] = self.response_headers
+            data["queries"] = [
                 {
-                    'sql': q.sql,
-                    'params': q.params,
-                    'duration_ms': round(q.duration_ms, 3),
-                    'is_duplicate': q.is_duplicate,
-                    'error': q.error,
-                    'stack': q.stack,
+                    "sql": q.sql,
+                    "params": q.params,
+                    "duration_ms": round(q.duration_ms, 3),
+                    "is_duplicate": q.is_duplicate,
+                    "error": q.error,
+                    "stack": q.stack,
                 }
                 for q in self.queries
             ]
@@ -301,19 +301,19 @@ class PathSummary:
 
     def as_dict(self) -> dict[str, object]:
         return {
-            'route': self.path,
-            'method': self.method,
-            'count': self.count,
-            'total_ms': round(self.total_ms, 3),
-            'avg_ms': round(self.avg_ms, 3),
-            'p50_ms': round(self.p50_ms, 3),
-            'p95_ms': round(self.p95_ms, 3),
-            'p99_ms': round(self.p99_ms, 3),
-            'max_ms': round(self.max_ms, 3),
-            'total_queries': self.total_queries,
-            'avg_queries': round(self.avg_queries, 3),
-            'total_duplicates': self.total_duplicates,
-            'total_errors': self.total_errors,
+            "route": self.path,
+            "method": self.method,
+            "count": self.count,
+            "total_ms": round(self.total_ms, 3),
+            "avg_ms": round(self.avg_ms, 3),
+            "p50_ms": round(self.p50_ms, 3),
+            "p95_ms": round(self.p95_ms, 3),
+            "p99_ms": round(self.p99_ms, 3),
+            "max_ms": round(self.max_ms, 3),
+            "total_queries": self.total_queries,
+            "avg_queries": round(self.avg_queries, 3),
+            "total_duplicates": self.total_duplicates,
+            "total_errors": self.total_errors,
         }
 
 
@@ -330,8 +330,8 @@ class StatementSummary:
     #: How many distinct routes ran it. More than one means a shared query --
     #: often a serialiser or a permission check nobody thinks about.
     route_count: int = 0
-    sample_route: str = ''
-    sample_method: str = 'GET'
+    sample_route: str = ""
+    sample_method: str = "GET"
     failures: int = 0
 
     @property
@@ -344,20 +344,20 @@ class StatementSummary:
 
     @property
     def operation(self) -> str:
-        head = self.sql.lstrip().split(' ', 1)[0].upper()
-        return head if head.isalpha() else 'SQL'
+        head = self.sql.lstrip().split(" ", 1)[0].upper()
+        return head if head.isalpha() else "SQL"
 
     def as_dict(self) -> dict[str, object]:
         return {
-            'sql': self.sql,
-            'count': self.count,
-            'total_ms': round(self.total_ms, 3),
-            'avg_ms': round(self.avg_ms, 3),
-            'max_ms': round(self.max_ms, 3),
-            'requests': self.requests,
-            'per_request': round(self.per_request, 2),
-            'route_count': self.route_count,
-            'sample_route': self.sample_route,
-            'sample_method': self.sample_method,
-            'failures': self.failures,
+            "sql": self.sql,
+            "count": self.count,
+            "total_ms": round(self.total_ms, 3),
+            "avg_ms": round(self.avg_ms, 3),
+            "max_ms": round(self.max_ms, 3),
+            "requests": self.requests,
+            "per_request": round(self.per_request, 2),
+            "route_count": self.route_count,
+            "sample_route": self.sample_route,
+            "sample_method": self.sample_method,
+            "failures": self.failures,
         }

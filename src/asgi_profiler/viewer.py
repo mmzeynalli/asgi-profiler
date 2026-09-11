@@ -36,50 +36,50 @@ from .config import ProfilerConfig
 from .storage import Filters, Storage
 
 HERE = Path(__file__).parent
-TEMPLATES = Jinja2Templates(directory=str(HERE / 'templates'))
-CSS_PATH = HERE / 'static' / 'profiler.css'
+TEMPLATES = Jinja2Templates(directory=str(HERE / "templates"))
+CSS_PATH = HERE / "static" / "profiler.css"
 
 
 class _Urls:
     """Mount-aware URL builder handed to the templates."""
 
-    __slots__ = ('root',)
+    __slots__ = ("root",)
 
-    def __init__(self, request: Request, prefix: str = '') -> None:
-        root = request.scope.get('root_path', '').rstrip('/')
-        self.root = root or prefix.rstrip('/')
+    def __init__(self, request: Request, prefix: str = "") -> None:
+        root = request.scope.get("root_path", "").rstrip("/")
+        self.root = root or prefix.rstrip("/")
 
     @property
     def requests(self) -> str:
-        return f'{self.root}/'
+        return f"{self.root}/"
 
     @property
     def summary(self) -> str:
-        return f'{self.root}/summary'
+        return f"{self.root}/summary"
 
     @property
     def statements(self) -> str:
-        return f'{self.root}/statements'
+        return f"{self.root}/statements"
 
     @property
     def clear(self) -> str:
-        return f'{self.root}/clear'
+        return f"{self.root}/clear"
 
     @property
     def css(self) -> str:
-        return f'{self.root}/static/profiler.css'
+        return f"{self.root}/static/profiler.css"
 
     def detail(self, profile_id: str) -> str:
-        return f'{self.root}/request/{profile_id}'
+        return f"{self.root}/request/{profile_id}"
 
     def page(self, params: Any, number: int) -> str:
         """The current listing URL with `page` replaced."""
-        query = {k: v for k, v in params.items() if k != 'page' and v != ''}
-        query['page'] = str(number)
-        return f'{self.root}/?{urlencode(query)}'
+        query = {k: v for k, v in params.items() if k != "page" and v != ""}
+        query["page"] = str(number)
+        return f"{self.root}/?{urlencode(query)}"
 
     def for_route(self, method: str, route: str) -> str:
-        return f'{self.root}/?{urlencode({"route": route, "method": method})}'
+        return f"{self.root}/?{urlencode({'route': route, 'method': method})}"
 
 
 def _same_origin(request: Request) -> bool:
@@ -90,16 +90,16 @@ def _same_origin(request: Request) -> bool:
     hidden auto-submitting form. Non-browser clients send neither header and
     are left alone.
     """
-    site = request.headers.get('sec-fetch-site')
+    site = request.headers.get("sec-fetch-site")
     if site is not None:
         # Allow-list, not a deny-list: `same-site` is a *different origin* on a
         # sibling subdomain, which is exactly the attacker we are excluding.
-        return site in ('same-origin', 'none')
-    origin = request.headers.get('origin')
+        return site in ("same-origin", "none")
+    origin = request.headers.get("origin")
     if origin is None:
         return True  # curl, httpx, the test client
-    host = request.headers.get('host', '')
-    return origin.split('://', 1)[-1] == host
+    host = request.headers.get("host", "")
+    return origin.split("://", 1)[-1] == host
 
 
 class Guarded:
@@ -114,18 +114,18 @@ class Guarded:
         self.authorize = authorize
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        if scope['type'] == 'http':
+        if scope["type"] == "http":
             verdict = self.authorize(Request(scope, receive))
             if inspect.isawaitable(verdict):
                 verdict = await verdict
             if not verdict:
-                response = PlainTextResponse('Forbidden', status_code=403)
+                response = PlainTextResponse("Forbidden", status_code=403)
                 await response(scope, receive, send)
                 return
         await self.app(scope, receive, send)
 
 
-def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> Any:
+def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = "") -> Any:
     """Return the ASGI app that renders the profiler UI.
 
     Args:
@@ -133,7 +133,7 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
         config: the active :class:`ProfilerConfig`.
         prefix: mount prefix, used when the server does not set `root_path`.
     """
-    css = CSS_PATH.read_text(encoding='utf-8')
+    css = CSS_PATH.read_text(encoding="utf-8")
 
     # Every storage read runs in a worker thread. A `Storage` is a synchronous
     # interface -- SQLite queries, a lock, and a bounded wait for the writer --
@@ -145,9 +145,9 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
 
     async def ctx(request: Request, **extra: Any) -> dict[str, Any]:
         return {
-            'config': config,
-            'storage_size': await read(storage.count),
-            'urls': _Urls(request, prefix),
+            "config": config,
+            "storage_size": await read(storage.count),
+            "urls": _Urls(request, prefix),
             **extra,
         }
 
@@ -155,7 +155,7 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
         params = request.query_params
         filters = Filters.from_params(params)
         try:
-            number = int(params.get('page', '1'))
+            number = int(params.get("page", "1"))
         except ValueError:
             number = 1
         page = await read(storage.search, filters, page=number, size=config.page_size)
@@ -165,7 +165,7 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
         filters, page = await _page_for(request)
         return TEMPLATES.TemplateResponse(
             request,
-            'requests.html',
+            "requests.html",
             await ctx(
                 request,
                 page=page,
@@ -180,7 +180,7 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
     async def summary_page(request: Request) -> Response:
         return TEMPLATES.TemplateResponse(
             request,
-            'summary.html',
+            "summary.html",
             await ctx(
                 request,
                 rows=await read(storage.summarise),
@@ -191,7 +191,7 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
     async def statements_page(request: Request) -> Response:
         return TEMPLATES.TemplateResponse(
             request,
-            'statements.html',
+            "statements.html",
             await ctx(
                 request,
                 rows=await read(storage.statements, config.statement_limit),
@@ -200,26 +200,26 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
         )
 
     async def detail_page(request: Request) -> Response:
-        profile = await read(storage.get, request.path_params['profile_id'])
+        profile = await read(storage.get, request.path_params["profile_id"])
         if profile is None:
             return RedirectResponse(_Urls(request, prefix).requests, 302)
         return TEMPLATES.TemplateResponse(
             request,
-            'detail.html',
+            "detail.html",
             await ctx(request, profile=profile, groups=profile.query_groups),
         )
 
     async def clear(request: Request) -> Response:
         if not _same_origin(request):
-            return PlainTextResponse('Cross-site request rejected', status_code=403)
+            return PlainTextResponse("Cross-site request rejected", status_code=403)
         await read(storage.clear)
         return RedirectResponse(_Urls(request, prefix).requests, 303)
 
     async def stylesheet(request: Request) -> Response:  # noqa: ARG001  (unused-function-argument)
         return Response(
             css,
-            media_type='text/css',
-            headers={'cache-control': 'no-cache'},
+            media_type="text/css",
+            headers={"cache-control": "no-cache"},
         )
 
     # -- JSON ------------------------------------------------------------
@@ -230,42 +230,42 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = '') -> 
         _, page = await _page_for(request)
         return JSONResponse(
             {
-                'total': page.total,
-                'page': page.number,
-                'pages': page.pages,
-                'size': page.size,
-                'requests': [p.as_dict(with_queries=False) for p in page.items],
+                "total": page.total,
+                "page": page.number,
+                "pages": page.pages,
+                "size": page.size,
+                "requests": [p.as_dict(with_queries=False) for p in page.items],
             }
         )
 
     async def detail_json(request: Request) -> Response:
-        profile = await read(storage.get, request.path_params['profile_id'])
+        profile = await read(storage.get, request.path_params["profile_id"])
         if profile is None:
-            return JSONResponse({'error': 'not found'}, status_code=404)
+            return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(profile.as_dict())
 
     async def summary_json(request: Request) -> Response:  # noqa: ARG001  (unused-function-argument)
         rows = await read(storage.summarise)
-        return JSONResponse({'routes': [row.as_dict() for row in rows]})
+        return JSONResponse({"routes": [row.as_dict() for row in rows]})
 
     async def statements_json(request: Request) -> Response:  # noqa: ARG001  (unused-function-argument)
         rows = await read(storage.statements, config.statement_limit)
-        return JSONResponse({'statements': [row.as_dict() for row in rows]})
+        return JSONResponse({"statements": [row.as_dict() for row in rows]})
 
     routes = [
-        Route('/', requests_page, name='profiler_requests'),
-        Route('/summary', summary_page, name='profiler_summary'),
-        Route('/statements', statements_page, name='profiler_statements'),
+        Route("/", requests_page, name="profiler_requests"),
+        Route("/summary", summary_page, name="profiler_summary"),
+        Route("/statements", statements_page, name="profiler_statements"),
         # The JSON routes come first: `{profile_id}` matches any non-slash
         # run, so `/request/abc.json` would otherwise be served as HTML for a
         # profile literally named "abc.json".
-        Route('/requests.json', requests_json, name='profiler_requests_json'),
-        Route('/summary.json', summary_json, name='profiler_summary_json'),
-        Route('/statements.json', statements_json, name='profiler_statements_json'),
-        Route('/request/{profile_id}.json', detail_json, name='profiler_detail_json'),
-        Route('/request/{profile_id}', detail_page, name='profiler_detail'),
-        Route('/clear', clear, methods=['POST'], name='profiler_clear'),
-        Route('/static/profiler.css', stylesheet, name='profiler_css'),
+        Route("/requests.json", requests_json, name="profiler_requests_json"),
+        Route("/summary.json", summary_json, name="profiler_summary_json"),
+        Route("/statements.json", statements_json, name="profiler_statements_json"),
+        Route("/request/{profile_id}.json", detail_json, name="profiler_detail_json"),
+        Route("/request/{profile_id}", detail_page, name="profiler_detail"),
+        Route("/clear", clear, methods=["POST"], name="profiler_clear"),
+        Route("/static/profiler.css", stylesheet, name="profiler_css"),
     ]
 
     viewer = Starlette(routes=routes)

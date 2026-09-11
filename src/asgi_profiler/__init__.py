@@ -45,28 +45,28 @@ from .storage import (
 from .viewer import build_viewer
 
 __all__ = [
-    'BaseStorage',
-    'Filters',
-    'MemoryStorage',
-    'Page',
-    'PathSummary',
-    'Profile',
-    'Profiler',
-    'ProfilerConfig',
-    'ProfilerMiddleware',
-    'Query',
-    'QueryGroup',
-    'SQLiteStorage',
-    'StatementSummary',
-    'Storage',
-    'aggregate_statements',
-    'build_viewer',
-    'group_queries',
-    'install',
-    'install_sql_hooks',
-    'route_pattern',
-    'summarise',
-    'uninstall_sql_hooks',
+    "BaseStorage",
+    "Filters",
+    "MemoryStorage",
+    "Page",
+    "PathSummary",
+    "Profile",
+    "Profiler",
+    "ProfilerConfig",
+    "ProfilerMiddleware",
+    "Query",
+    "QueryGroup",
+    "SQLiteStorage",
+    "StatementSummary",
+    "Storage",
+    "aggregate_statements",
+    "build_viewer",
+    "group_queries",
+    "install",
+    "install_sql_hooks",
+    "route_pattern",
+    "summarise",
+    "uninstall_sql_hooks",
 ]
 
 try:
@@ -74,9 +74,9 @@ try:
     #: hand-maintained literal drifts from `pyproject.toml` silently, and the
     #: release only compares the tag against the packaged version -- so a
     #: wheel can ship saying 0.1.0 in its metadata and 0.0.1 in its code.
-    __version__ = _installed_version('asgi-profiler')
+    __version__ = _installed_version("asgi-profiler")
 except PackageNotFoundError:  # pragma: no cover - running from a source tree
-    __version__ = '0.0.0.dev0'
+    __version__ = "0.0.0.dev0"
 
 #: Marker set on an app that already has the profiler, so a second
 #: `install()` is refused rather than silently doubling every count.
@@ -84,7 +84,7 @@ except PackageNotFoundError:  # pragma: no cover - running from a source tree
 #: An attribute on the app rather than a set of `id()`s: CPython reuses the
 #: address of a collected object, so an id-keyed set reports a false positive
 #: as soon as an earlier app is garbage collected.
-_MARKER = '_asgi_profiler_installed'
+_MARKER = "_asgi_profiler_installed"
 
 
 class Profiler:
@@ -109,7 +109,7 @@ class Profiler:
         return self.storage.search(filters or Filters(), **kwargs)
 
     def slowest(self, count: int = 10) -> list[Profile]:
-        return self.storage.search(Filters(order='slowest'), page=1, size=count).items
+        return self.storage.search(Filters(order="slowest"), page=1, size=count).items
 
     def summary(self) -> list[PathSummary]:
         return self.storage.summarise()
@@ -122,7 +122,7 @@ class Profiler:
 
     def close(self) -> None:
         """Release the storage backend. Safe to call on any backend."""
-        closer = getattr(self.storage, 'close', None)
+        closer = getattr(self.storage, "close", None)
         if callable(closer):
             closer()
 
@@ -156,14 +156,14 @@ def install(
     config = dataclasses.replace(config) if config is not None else ProfilerConfig()
     for key, value in options.items():
         if not hasattr(config, key):
-            raise TypeError(f'Unknown profiler option: {key!r}')
+            raise TypeError(f"Unknown profiler option: {key!r}")
         setattr(config, key, value)
 
     if getattr(app, _MARKER, False):
         raise RuntimeError(
-            'The profiler is already installed on this app. Installing twice '
-            'adds a second middleware and a second mount, so every request is '
-            'recorded twice into two separate stores.'
+            "The profiler is already installed on this app. Installing twice "
+            "adds a second middleware and a second mount, so every request is "
+            "recorded twice into two separate stores."
         )
 
     if storage is None:
@@ -179,7 +179,7 @@ def install(
     app.mount(
         config.mount_path,
         build_viewer(storage, config, prefix=config.mount_path),
-        name='profiler',
+        name="profiler",
     )
     with contextlib.suppress(AttributeError):  # an app defining __slots__
         setattr(app, _MARKER, True)

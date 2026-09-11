@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
 
 
 class Widget(Base):
-    __tablename__ = 'widget'
+    __tablename__ = "widget"
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
@@ -38,8 +38,8 @@ class Widget(Base):
 @pytest.fixture
 def maker(tmp_path):
     engine = create_engine(
-        f'sqlite:///{tmp_path / "c.db"}',
-        connect_args={'check_same_thread': False},
+        f"sqlite:///{tmp_path / 'c.db'}",
+        connect_args={"check_same_thread": False},
     )
     Base.metadata.create_all(engine)
     yield sessionmaker(bind=engine)
@@ -50,44 +50,44 @@ def test_concurrent_requests_do_not_bleed_queries(maker):
     """Each request runs a different number of queries, all at once."""
 
     async def run_n(request):
-        n = int(request.path_params['n'])
+        n = int(request.path_params["n"])
 
         def work():
             with maker() as session:
                 for _ in range(n):
-                    session.execute(text('SELECT 1'))
+                    session.execute(text("SELECT 1"))
 
         await asyncio.to_thread(work)
-        return JSONResponse({'n': n})
+        return JSONResponse({"n": n})
 
-    app = Starlette(routes=[Route('/n/{n}', run_n)])
+    app = Starlette(routes=[Route("/n/{n}", run_n)])
     profiler = install(app)
 
     async def hammer():
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url='http://t') as c:
-            await asyncio.gather(*[c.get(f'/n/{n}') for n in range(1, 9)])
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            await asyncio.gather(*[c.get(f"/n/{n}") for n in range(1, 9)])
 
     asyncio.run(hammer())
 
     recorded = {p.path: p.query_count for p in profiler.profiles}
-    assert recorded == {f'/n/{n}': n for n in range(1, 9)}
+    assert recorded == {f"/n/{n}": n for n in range(1, 9)}
 
 
 def test_queries_from_a_gather_land_on_one_profile(maker):
     async def fan_out(request):
         def work(i):
             with maker() as session:
-                session.execute(text(f'SELECT {i}'))
+                session.execute(text(f"SELECT {i}"))
 
         await asyncio.gather(*[asyncio.to_thread(work, i) for i in range(5)])
         return JSONResponse({})
 
-    app = Starlette(routes=[Route('/fan', fan_out)])
+    app = Starlette(routes=[Route("/fan", fan_out)])
     profiler = install(app)
 
     with TestClient(app) as client:
-        client.get('/fan')
+        client.get("/fan")
 
     assert profiler.profiles[0].query_count == 5
 
@@ -118,20 +118,20 @@ def test_a_custom_storage_only_needs_the_core_methods():
     async def endpoint(request):
         return JSONResponse({})
 
-    app = Starlette(routes=[Route('/thing/{n}', endpoint)])
+    app = Starlette(routes=[Route("/thing/{n}", endpoint)])
     storage = ListStorage()
     install(app, storage=storage, page_size=2)
 
     with TestClient(app) as client:
         for i in range(5):
-            client.get(f'/thing/{i}')
+            client.get(f"/thing/{i}")
 
-        listing = client.get('/profiler/')
+        listing = client.get("/profiler/")
         assert listing.status_code == 200
-        assert 'Page 1 of 3' in listing.text
+        assert "Page 1 of 3" in listing.text
 
-        summary = client.get('/profiler/summary')
+        summary = client.get("/profiler/summary")
         assert summary.status_code == 200
-        assert '/thing/{n}' in summary.text
+        assert "/thing/{n}" in summary.text
 
     assert storage.count() == 5
