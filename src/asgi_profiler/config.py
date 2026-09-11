@@ -20,7 +20,7 @@ DEFAULT_REDACTED_HEADERS = (
 
 @dataclass
 class ProfilerConfig:
-    """Options for :func:`starlette_profiler.install`.
+    """Options for :func:`asgi_profiler.install`.
 
     Args:
         mount_path: where the viewer is mounted. Every link the viewer emits is

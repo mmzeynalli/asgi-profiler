@@ -15,7 +15,7 @@ from .models import Profile, Query
 from .routing import request_path, route_path, route_pattern
 from .storage import Storage
 
-logger = logging.getLogger("starlette_profiler")
+logger = logging.getLogger("asgi_profiler")
 
 
 class ProfilerMiddleware:
@@ -136,9 +136,7 @@ class ProfilerMiddleware:
             if name in self._redacted:
                 out[name] = "<redacted>"
                 continue
-            out[name] = (
-                value.decode("latin-1") if isinstance(value, bytes) else str(value)
-            )
+            out[name] = value.decode("latin-1") if isinstance(value, bytes) else str(value)
         return out
 
     @staticmethod

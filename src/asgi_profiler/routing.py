@@ -10,10 +10,13 @@ to understand request capture.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from starlette.routing import Match
 from starlette.types import Scope
+
+logger = logging.getLogger("asgi_profiler")
 
 __all__ = ["request_path", "route_path", "route_pattern"]
 
@@ -84,7 +87,12 @@ def _walk_routes(routes: Any, scope: Scope, prefix: str) -> str:
     for route in routes:
         try:
             match, child = route.matches(scope)
-        except Exception:  # pragma: no cover - a hostile custom route
+        except Exception:  # pragma: no cover - a custom route that raises
+            # Skipping is right -- naming a route must never break the request
+            # being profiled -- but skipping in total silence is how a whole
+            # router quietly reports as unmatched. Say so at debug level; this
+            # costs nothing until it actually happens.
+            logger.debug("route %r raised while matching", route, exc_info=True)
             continue
         if match is Match.NONE:
             continue

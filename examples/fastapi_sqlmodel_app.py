@@ -15,12 +15,14 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
 
-from starlette_profiler import install
+from asgi_profiler import install
 
 
 class Author(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
+    # UP037 quoted-annotation: SQLModel resolves the annotation at runtime,
+    # so the quotes have to stay.
     books: list["Book"] = Relationship(back_populates="author")  # noqa: UP037
 
 
@@ -31,9 +33,7 @@ class Book(SQLModel, table=True):
     author: Author | None = Relationship(back_populates="books")
 
 
-engine = create_engine(
-    "sqlite:///example.db", connect_args={"check_same_thread": False}
-)
+engine = create_engine("sqlite:///example.db", connect_args={"check_same_thread": False})
 SQLModel.metadata.create_all(engine)
 
 with Session(engine) as session:
@@ -58,10 +58,7 @@ def list_books():
 def list_books_n1():
     """A deliberate N+1: one query for books, then one per author."""
     with Session(engine) as session:
-        return [
-            {"title": b.title, "author": b.author.name}
-            for b in session.exec(select(Book))
-        ]
+        return [{"title": b.title, "author": b.author.name} for b in session.exec(select(Book))]
 
 
 @app.get("/books/{book_id}")
@@ -89,7 +86,7 @@ def broken():
 
 
 # Swap in SQLiteStorage to keep history across restarts and across workers:
-#     from starlette_profiler import SQLiteStorage
+#     from asgi_profiler import SQLiteStorage
 #     install(app, storage=SQLiteStorage("profiler.db"))
 install(app)  # viewer at /profiler
 

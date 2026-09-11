@@ -1,6 +1,6 @@
 """Serve the viewer against a `profiler.db` file, with no application.
 
-    python -m starlette_profiler profiler.db
+    python -m asgi_profiler profiler.db
 
 Capturing in staging and reading the file on your laptop should not require
 booting the application that produced it. The viewer is already a
@@ -19,16 +19,22 @@ from .viewer import build_viewer
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Reachable two ways, and each needs a different usage line. Left to
+    # argparse, `python -m asgi_profiler` would print `usage: __main__.py`,
+    # because that is what `-m` puts in argv[0]; hard-coded, the console
+    # script would print a command the user did not type.
+    if Path(sys.argv[0]).stem == "__main__":
+        prog = "python -m asgi_profiler"
+    else:
+        prog = "asgi-profiler"
     parser = argparse.ArgumentParser(
-        prog="python -m starlette_profiler",
-        description="Browse a starlette-profiler SQLite capture.",
+        prog=prog,
+        description="Browse an asgi-profiler SQLite capture.",
     )
     parser.add_argument("database", type=Path, help="path to a profiler.db file")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument(
-        "--page-size", type=int, default=50, help="rows per page (default: 50)"
-    )
+    parser.add_argument("--page-size", type=int, default=50, help="rows per page (default: 50)")
     args = parser.parse_args(argv)
 
     if not args.database.exists():

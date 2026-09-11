@@ -5,6 +5,11 @@ Each of these failed before the fix.
 
 from __future__ import annotations
 
+try:  # Starlette's TestClient moved to httpx2; either may be what is installed
+    import httpx2 as httpx
+except ImportError:  # pragma: no cover - depends on the installed Starlette
+    import httpx
+
 import asyncio
 import math
 
@@ -18,7 +23,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import (
+from asgi_profiler import (
     Filters,
     MemoryStorage,
     Profile,
@@ -26,7 +31,7 @@ from starlette_profiler import (
     SQLiteStorage,
     install,
 )
-from starlette_profiler.viewer import _same_origin
+from asgi_profiler.viewer import _same_origin
 
 
 class Base(DeclarativeBase):
@@ -185,8 +190,6 @@ def test_counters_match_the_recorded_queries(tmp_path):
     profiler = install(app)
 
     async def drive():
-        import httpx
-
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
             await c.get("/bg")
@@ -403,9 +406,7 @@ def test_a_raw_asgi_mount_records_each_path():
     assert static == {"/static/nope-a.css", "/static/nope-b.css"}
 
     # and excluding the mount silences them entirely
-    other = Starlette(
-        routes=[Mount("/static", app=StaticFiles(directory=".", check_dir=False))]
-    )
+    other = Starlette(routes=[Mount("/static", app=StaticFiles(directory=".", check_dir=False))])
     quiet = install(other, exclude_paths=["/static"], mount_path="/prof")
     with TestClient(other) as client:
         client.get("/static/nope-c.css")
@@ -454,7 +455,7 @@ def test_uninstall_sql_hooks_actually_stops_capture(tmp_path):
     """Exported and advertised for teardown, but nothing verified it worked."""
     from sqlalchemy import create_engine, text
 
-    from starlette_profiler import install_sql_hooks, uninstall_sql_hooks
+    from asgi_profiler import install_sql_hooks, uninstall_sql_hooks
 
     engine = create_engine(f"sqlite:///{tmp_path / 'u.db'}")
 

@@ -2,15 +2,16 @@
 
 # Changelog
 
-All notable changes to `starlette-profiler` are documented here. The format is
+All notable changes to `asgi-profiler` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/) and this project
 follows [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 11.09.2026
 
-First release. Silk-style request and SQL profiling for **Starlette** and
-**FastAPI**, with **SQLAlchemy** and **SQLModel**. `install(app)` is the whole
-integration — no settings module, no database table, no migration.
+First release. Request and SQL profiling for **ASGI** applications —
+**Starlette**, **FastAPI** — with **SQLAlchemy** and **SQLModel**.
+`install(app)` is the whole integration: no settings module, no database
+table, no migration.
 
 ### Added
 
@@ -44,7 +45,7 @@ integration — no settings module, no database table, no migration.
 - `Storage` protocol plus a `BaseStorage` that supplies searching, paging,
   summarising and statement aggregation, so a custom backend needs five
   methods.
-- `python -m starlette_profiler profiler.db` — browse a capture file offline,
+- `python -m asgi_profiler profiler.db` — browse a capture file offline,
   read-only, with no application.
 - `authorize=` hook, sync or async. `POST /clear` rejects cross-site requests.
 - `py.typed`, checked in CI with both `mypy` and `ty`, on Python 3.10–3.13.

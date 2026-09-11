@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import ProfilerConfig, install
+from asgi_profiler import ProfilerConfig, install
 
 
 class Base(DeclarativeBase):
@@ -250,9 +250,7 @@ def test_works_under_a_custom_mount_path(session_maker):
 
 
 def test_authorize_hook_can_deny(session_maker):
-    config = ProfilerConfig(
-        authorize=lambda request: request.headers.get("x-key") == "letmein"
-    )
+    config = ProfilerConfig(authorize=lambda request: request.headers.get("x-key") == "letmein")
     app, _ = build_app(session_maker, config=config)
     with TestClient(app) as client:
         assert client.get("/profiler/").status_code == 403

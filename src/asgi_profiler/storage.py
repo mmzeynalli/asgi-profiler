@@ -33,7 +33,7 @@ from typing import Any, Protocol
 
 from .models import PathSummary, Profile, Query, StatementSummary
 
-logger = logging.getLogger("starlette_profiler")
+logger = logging.getLogger("asgi_profiler")
 
 #: Aliases resolved at module scope. Inside the storage classes the name
 #: `list` is bound to the method, so a bare `-> list[Profile]` annotation
@@ -212,9 +212,7 @@ def _paginate(profiles: Profiles, *, page: int, size: int) -> Page:
     pages = max(1, -(-total // size))
     number = min(max(1, page), pages)
     start = (number - 1) * size
-    return Page(
-        items=profiles[start : start + size], total=total, number=number, size=size
-    )
+    return Page(items=profiles[start : start + size], total=total, number=number, size=size)
 
 
 class MemoryStorage(BaseStorage):
@@ -407,7 +405,7 @@ class SQLiteStorage(BaseStorage):
             self._queue = queue.Queue()
             self._writer = threading.Thread(
                 target=self._drain_forever,
-                name="starlette-profiler-writer",
+                name="asgi-profiler-writer",
                 daemon=True,
             )
             self._writer.start()
@@ -431,7 +429,7 @@ class SQLiteStorage(BaseStorage):
         if version != SCHEMA_VERSION:
             raise IncompatibleCapture(
                 f"{self.path} was written by a different version of "
-                f"starlette-profiler (schema {version}, expected "
+                f"asgi-profiler (schema {version}, expected "
                 f"{SCHEMA_VERSION}). Re-capture with this version."
             )
 
@@ -475,7 +473,10 @@ class SQLiteStorage(BaseStorage):
         if self._queue is None or self._closed:
             return
         deadline = time.monotonic() + timeout
-        while self._queue.unfinished_tasks:  # type: ignore[attr-defined]
+        # `unfinished_tasks` is undocumented but stable since 2.5 -- reading it
+        # is what lets this poll with a deadline instead of `join()`, which
+        # cannot time out.
+        while self._queue.unfinished_tasks:
             if time.monotonic() > deadline or not self._alive():
                 logger.warning("Timed out flushing profiles to %s", self.path)
                 return
@@ -492,7 +493,11 @@ class SQLiteStorage(BaseStorage):
         a writer that dies with items outstanding parks every future flush --
         and every viewer request -- forever.
         """
-        assert self._queue is not None
+        # Not an `assert`: `python -O` strips those, and this one is the
+        # narrowing the rest of the body relies on. A real check costs one
+        # comparison once per thread.
+        if self._queue is None:  # pragma: no cover - unreachable by construction
+            return
         while True:
             batch: Profiles = []
             stop = False
@@ -551,7 +556,7 @@ class SQLiteStorage(BaseStorage):
         already = {
             r["id"]
             for r in self._conn.execute(
-                f"SELECT id FROM profiles WHERE id IN ({','.join('?' * len(deduped))})",
+                f"SELECT id FROM profiles WHERE id IN ({','.join('?' * len(deduped))})",  # nosec hardcoded_sql_expressions
                 list(deduped),
             )
         }
@@ -561,7 +566,7 @@ class SQLiteStorage(BaseStorage):
             # profile's statement rows survive it -- unreachable, but still
             # aggregated, inflating every count on the statements page.
             self._conn.execute(
-                "DELETE FROM statements WHERE profile_seq IN"
+                "DELETE FROM statements WHERE profile_seq IN"  # nosec hardcoded_sql_expressions
                 f" (SELECT seq FROM profiles WHERE id IN"
                 f" ({','.join('?' * len(already))}))",
                 list(already),
@@ -570,7 +575,7 @@ class SQLiteStorage(BaseStorage):
         seqs = {
             r["id"]: r["seq"]
             for r in self._conn.execute(
-                "SELECT id, seq FROM profiles WHERE id IN"
+                "SELECT id, seq FROM profiles WHERE id IN"  # nosec hardcoded_sql_expressions
                 f" ({','.join('?' * len(rows))})",
                 [p.id for _, p in rows],
             )
@@ -641,9 +646,7 @@ class SQLiteStorage(BaseStorage):
             return
         cutoff = row["seq"]
         self._conn.execute("DELETE FROM statements WHERE profile_seq <= ?", (cutoff,))
-        deleted = self._conn.execute(
-            "DELETE FROM profiles WHERE seq <= ?", (cutoff,)
-        ).rowcount
+        deleted = self._conn.execute("DELETE FROM profiles WHERE seq <= ?", (cutoff,)).rowcount
         self._bump_rows(-max(0, deleted))
 
     def clear(self) -> None:
@@ -694,9 +697,7 @@ class SQLiteStorage(BaseStorage):
         self.flush()
         sql = "SELECT * FROM profiles ORDER BY seq DESC LIMIT ? OFFSET ?"
         with self._lock:
-            rows = self._conn.execute(
-                sql, (-1 if limit is None else limit, offset)
-            ).fetchall()
+            rows = self._conn.execute(sql, (-1 if limit is None else limit, offset)).fetchall()
         return [_row_to_profile(r, with_queries=True) for r in rows]
 
     def search(self, filters: Filters, *, page: int = 1, size: int = 50) -> Page:
@@ -705,7 +706,8 @@ class SQLiteStorage(BaseStorage):
         with self._lock:
             total = int(
                 self._conn.execute(
-                    f"SELECT COUNT(*) AS n FROM profiles {where}", params
+                    f"SELECT COUNT(*) AS n FROM profiles {where}",  # nosec hardcoded_sql_expressions
+                    params,
                 ).fetchone()["n"]
             )
             size = max(1, size)
@@ -721,7 +723,7 @@ class SQLiteStorage(BaseStorage):
                 "sql": "query_ms DESC, seq DESC",
             }.get(filters.order, "seq DESC")
             rows = self._conn.execute(
-                f"SELECT * FROM profiles {where} ORDER BY {order} LIMIT ? OFFSET ?",
+                f"SELECT * FROM profiles {where} ORDER BY {order} LIMIT ? OFFSET ?",  # nosec hardcoded_sql_expressions
                 (*params, size, (number - 1) * size),
             ).fetchall()
         # The listing shows counters, never individual statements, so skip the
@@ -850,12 +852,7 @@ def _where(filters: Filters) -> tuple[str, tuple[Any, ...]]:
         # 16 ms at 20k rows against 3.7 ms for the pure-Python backend, which
         # is the opposite of the point of pushing the filter down.
         clauses.append("search_path LIKE ? ESCAPE '\\'")
-        needle = (
-            filters.q.lower()
-            .replace("\\", "\\\\")
-            .replace("%", "\\%")
-            .replace("_", "\\_")
-        )
+        needle = filters.q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         params.append(f"%{needle}%")
     if filters.method:
         clauses.append("method = ?")
@@ -949,9 +946,7 @@ def summarise(profiles: Iterable[Profile]) -> PathSummaries:
     return sorted(rows.values(), key=lambda r: r.total_ms, reverse=True)
 
 
-def aggregate_statements(
-    profiles: Iterable[Profile], limit: int = 100
-) -> StatementSummaries:
+def aggregate_statements(profiles: Iterable[Profile], limit: int = 100) -> StatementSummaries:
     """Group every recorded statement by its SQL, across all requests.
 
     The per-request view answers "why is *this* endpoint slow". This answers

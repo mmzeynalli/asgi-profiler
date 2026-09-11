@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import asyncio
 
-import httpx
+try:  # Starlette's TestClient moved to httpx2; either may be what is installed
+    import httpx2 as httpx
+except ImportError:  # pragma: no cover - depends on the installed Starlette
+    import httpx
 import pytest
 from sqlalchemy import Column, Integer, String, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -19,7 +22,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import BaseStorage, Profile, install
+from asgi_profiler import BaseStorage, Profile, install
 
 
 class Base(DeclarativeBase):

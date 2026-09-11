@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import (
+from asgi_profiler import (
     Filters,
     MemoryStorage,
     Profile,
@@ -184,9 +184,7 @@ def test_search_paginates(storage):
 
 def test_search_pagination_respects_filters(storage):
     for i in range(30):
-        storage.add(
-            make_profile(i, path=f"/p{i:02d}", method="GET" if i % 2 else "POST")
-        )
+        storage.add(make_profile(i, path=f"/p{i:02d}", method="GET" if i % 2 else "POST"))
 
     page = storage.search(Filters(method="POST"), page=1, size=5)
     assert page.total == 15
@@ -195,9 +193,7 @@ def test_search_pagination_respects_filters(storage):
 
 def test_summarise_groups_by_route(storage):
     for i in range(3):
-        storage.add(
-            make_profile(i, path=f"/users/{i}", route="/users/{user_id}", duration=10)
-        )
+        storage.add(make_profile(i, path=f"/users/{i}", route="/users/{user_id}", duration=10))
     storage.add(make_profile(9, path="/health", duration=1))
 
     rows = {(r.method, r.path): r for r in storage.summarise()}
@@ -353,7 +349,7 @@ def test_capture_headers_can_be_disabled():
 
 def test_viewer_prefix_is_used_when_root_path_is_absent():
     """Litestar-style mounts do not set root_path; the prefix must cover it."""
-    from starlette_profiler import build_viewer
+    from asgi_profiler import build_viewer
 
     storage = MemoryStorage()
     storage.add(make_profile(1, path="/a"))
@@ -367,7 +363,7 @@ def test_viewer_prefix_is_used_when_root_path_is_absent():
 
 def test_root_path_wins_over_prefix():
     """A proxy prefix must not be clobbered by the configured mount path."""
-    from starlette_profiler import build_viewer
+    from asgi_profiler import build_viewer
 
     storage = MemoryStorage()
     viewer = build_viewer(storage, ProfilerConfig(), prefix="/profiler")

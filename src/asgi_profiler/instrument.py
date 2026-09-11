@@ -25,7 +25,7 @@ from .models import MAX_SQL_CHARS, Query
 try:  # SQLAlchemy pulls greenlet in for its asyncio support
     import greenlet
 except ImportError:  # pragma: no cover - sync-only install
-    greenlet = None  # type: ignore[assignment]
+    greenlet = None
 
 #: The list being filled for the in-flight request.
 #:
@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - sync-only install
 #: often runs in a worker thread (anyio copies the context into it), so appends
 #: made there must land in an object the request task already holds.
 current_queries: contextvars.ContextVar[list[Query] | None] = contextvars.ContextVar(
-    "starlette_profiler_queries", default=None
+    "asgi_profiler_queries", default=None
 )
 
 _IGNORED_FRAME_PARTS = (
@@ -41,8 +41,8 @@ _IGNORED_FRAME_PARTS = (
     "\\sqlalchemy\\",
     "/sqlmodel/",
     "\\sqlmodel\\",
-    "/starlette_profiler/",
-    "\\starlette_profiler\\",
+    "/asgi_profiler/",
+    "\\asgi_profiler\\",
     "/anyio/",
     "\\anyio\\",
     "/asyncio/",
@@ -86,16 +86,22 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
     if _installed:
         return
 
+    # ANN001 missing-type-function-argument, ARG001 unused-function-argument:
+    # SQLAlchemy calls this with a fixed positional signature we do not choose.
     def _before(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001, ARG001
         # A stack: a single connection can nest executions.
         conn.info.setdefault("_profiler_started", []).append(time.perf_counter())
 
+    # ANN001 missing-type-function-argument, ARG001 unused-function-argument:
+    # same fixed signature as `_before`.
     def _after(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001, ARG001
         started = conn.info.get("_profiler_started")
         if not started:
             return
         _record(statement, parameters, (time.perf_counter() - started.pop()) * 1000)
 
+    # ANN001 missing-type-function-argument: SQLAlchemy does not export
+    # `ExceptionContext` as a public name to annotate this with.
     def _error(context) -> None:  # noqa: ANN001
         """A statement that raised never reaches `after_cursor_execute`.
 
@@ -137,9 +143,7 @@ def uninstall() -> None:
     _installed = False
 
 
-def _record(
-    statement: Any, parameters: Any, elapsed_ms: float, error: str | None = None
-) -> None:
+def _record(statement: Any, parameters: Any, elapsed_ms: float, error: str | None = None) -> None:
     queries = current_queries.get()
     if queries is None:
         return  # outside any request: startup, migrations, a shell
@@ -149,11 +153,7 @@ def _record(
             sql=_normalise(statement),
             params=_format_params(parameters),
             duration_ms=elapsed_ms,
-            stack=(
-                _capture_stack(_settings["stack_depth"])
-                if _settings["capture_stacks"]
-                else []
-            ),
+            stack=(_capture_stack(_settings["stack_depth"]) if _settings["capture_stacks"] else []),
             error=error,
         )
     )

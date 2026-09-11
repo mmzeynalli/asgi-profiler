@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import (
+from asgi_profiler import (
     MemoryStorage,
     Profile,
     Query,
@@ -67,10 +67,7 @@ def n1_app(maker, **options):
     async def books_n1(request):
         with maker() as session:
             return JSONResponse(
-                [
-                    {"title": b.title, "author": b.author.name}
-                    for b in session.scalars(select(Book))
-                ]
+                [{"title": b.title, "author": b.author.name} for b in session.scalars(select(Book))]
             )
 
     async def one(request):
@@ -211,10 +208,7 @@ def test_aggregate_statements_spans_routes():
 def test_aggregate_statements_respects_the_limit():
     profile = make(
         1,
-        queries=[
-            Query(sql=f"SELECT {i}", params="()", duration_ms=float(i))
-            for i in range(20)
-        ],
+        queries=[Query(sql=f"SELECT {i}", params="()", duration_ms=float(i)) for i in range(20)],
     )
     rows = aggregate_statements([profile], limit=5)
     assert len(rows) == 5
@@ -266,9 +260,7 @@ def test_statements_survive_a_trim(tmp_path):
     """Evicted profiles must not leave their statements behind."""
     with SQLiteStorage(tmp_path / "trim.db", max_requests=3, background=False) as store:
         for i in range(10):
-            store.add(
-                make(i, route=f"/r{i}", queries=[Query(f"SELECT {i}", "()", 1.0)])
-            )
+            store.add(make(i, route=f"/r{i}", queries=[Query(f"SELECT {i}", "()", 1.0)]))
         assert store.count() == 3
         sqls = {r.sql for r in store.statements()}
         assert sqls == {"SELECT 7", "SELECT 8", "SELECT 9"}
@@ -276,9 +268,7 @@ def test_statements_survive_a_trim(tmp_path):
 
 # -------------------------------------------------------------- percentiles
 def test_summary_reports_percentiles():
-    profiles = [
-        make(i, path="/x", route="/x", duration=float(i)) for i in range(1, 101)
-    ]
+    profiles = [make(i, path="/x", route="/x", duration=float(i)) for i in range(1, 101)]
     row = summarise(profiles)[0]
 
     assert row.count == 100
@@ -418,8 +408,8 @@ def test_json_routes_are_not_shadowed_by_the_html_detail_route(maker):
 
 # ------------------------------------------------------- standalone viewer
 def test_standalone_viewer_reads_a_capture_file(tmp_path):
-    from starlette_profiler.config import ProfilerConfig
-    from starlette_profiler.viewer import build_viewer
+    from asgi_profiler.config import ProfilerConfig
+    from asgi_profiler.viewer import build_viewer
 
     path = tmp_path / "captured.db"
     with SQLiteStorage(path, background=False) as store:
@@ -437,7 +427,7 @@ def test_standalone_viewer_reads_a_capture_file(tmp_path):
 
 
 def test_main_rejects_a_missing_file(tmp_path, capsys):
-    from starlette_profiler.__main__ import main
+    from asgi_profiler.__main__ import main
 
     with pytest.raises(SystemExit):
         main([str(tmp_path / "nope.db")])

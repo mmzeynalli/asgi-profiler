@@ -13,7 +13,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from starlette_profiler import install
+from asgi_profiler import install
 
 
 class Base(DeclarativeBase):
@@ -34,9 +34,7 @@ class Book(Base):
     author = relationship("Author", lazy="select")
 
 
-engine = create_engine(
-    "sqlite:///example.db", connect_args={"check_same_thread": False}
-)
+engine = create_engine("sqlite:///example.db", connect_args={"check_same_thread": False})
 Session = sessionmaker(bind=engine)
 Base.metadata.create_all(engine)
 

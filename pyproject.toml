@@ -3,14 +3,25 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "starlette-profiler"
+name = "asgi-profiler"
 version = "0.1.0"
-description = "Silk-style request and SQL profiling for Starlette and FastAPI"
+description = "Request and SQL profiling for ASGI apps: Starlette, FastAPI, SQLAlchemy"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-keywords = ["starlette", "fastapi", "sqlalchemy", "sqlmodel", "profiler", "silk"]
+keywords = [
+  "asgi",
+  "starlette",
+  "fastapi",
+  "sqlalchemy",
+  "sqlmodel",
+  "profiler",
+  "profiling",
+  "n+1",
+  "sql",
+  "silk",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Web Environment",
@@ -23,7 +34,10 @@ classifiers = [
   "Topic :: Software Development :: Debuggers",
 ]
 dependencies = [
-  "starlette>=0.30",
+  # 0.35 is where `scope["path"]` stopped being stripped of the mount
+  # prefix. Below it the profiler records the wrong route for every
+  # mounted app -- silently, by writing bad data rather than raising.
+  "starlette>=0.35",
   "sqlalchemy>=2.0",
   "jinja2>=3.0",
 ]
@@ -32,39 +46,48 @@ dependencies = [
 test = [
   "pytest>=8",
   "pytest-cov",
+  # Starlette's TestClient requires httpx on older releases and httpx2 on
+  # newer ones; install both so the suite runs against either.
   "httpx",
+  "httpx2",
   "aiosqlite",
   "anyio",
+  # FastAPI and SQLModel are both claimed as supported in the README. Without
+  # them here the tests covering them skip in silence, which is the worst of
+  # both: a support claim resting on nothing.
+  "fastapi",
+  "sqlmodel",
 ]
-dev = [
-  "ruff",
-  "ty",
-  "mypy",
-  "uvicorn",
-  "build",
-  "twine",
-]
+dev = ["ruff", "ty", "bandit", "uvicorn"]
 
 [project.urls]
-Source = "https://github.com/mmzeynalli/starlette-profiler"
-Issues = "https://github.com/mmzeynalli/starlette-profiler/issues"
-Changelog = "https://github.com/mmzeynalli/starlette-profiler/blob/main/CHANGELOG.md"
+Source = "https://github.com/mmzeynalli/asgi-profiler"
+Issues = "https://github.com/mmzeynalli/asgi-profiler/issues"
+Changelog = "https://github.com/mmzeynalli/asgi-profiler/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/starlette_profiler"]
+packages = ["src/asgi_profiler"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "examples", "README.md", "LICENSE", "CHANGELOG.md"]
+include = [
+  "src",
+  "tests",
+  "examples",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [project.scripts]
-starlette-profiler = "starlette_profiler.__main__:main"
+asgi-profiler = "asgi_profiler.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -73,20 +96,12 @@ filterwarnings = [
   # `error::DeprecationWarning` turns any dependency's internal rename into a
   # red build on a green codebase, which trains everyone to ignore CI.
   "default",
-  "error::DeprecationWarning:starlette_profiler",
+  "error::DeprecationWarning:asgi_profiler",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["src/starlette_profiler"]
+source = ["src/asgi_profiler"]
 
 [tool.coverage.report]
-exclude_also = [
-  "if TYPE_CHECKING:",
-  "raise NotImplementedError",
-  "\\.\\.\\.",
-]
-
-[tool.mypy]
-files = ["src/starlette_profiler"]
-ignore_missing_imports = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]

@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import install, summarise
+from asgi_profiler import install, summarise
 
 
 class Base(DeclarativeBase):

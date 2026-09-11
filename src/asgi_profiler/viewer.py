@@ -215,7 +215,7 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = "") -> 
         await read(storage.clear)
         return RedirectResponse(_Urls(request, prefix).requests, 303)
 
-    async def stylesheet(request: Request) -> Response:  # noqa: ARG001
+    async def stylesheet(request: Request) -> Response:  # noqa: ARG001  (unused-function-argument)
         return Response(
             css,
             media_type="text/css",
@@ -244,11 +244,11 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = "") -> 
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(profile.as_dict())
 
-    async def summary_json(request: Request) -> Response:  # noqa: ARG001
+    async def summary_json(request: Request) -> Response:  # noqa: ARG001  (unused-function-argument)
         rows = await read(storage.summarise)
         return JSONResponse({"routes": [row.as_dict() for row in rows]})
 
-    async def statements_json(request: Request) -> Response:  # noqa: ARG001
+    async def statements_json(request: Request) -> Response:  # noqa: ARG001  (unused-function-argument)
         rows = await read(storage.statements, config.statement_limit)
         return JSONResponse({"statements": [row.as_dict() for row in rows]})
 

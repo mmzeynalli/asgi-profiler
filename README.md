@@ -1,30 +1,30 @@
-# starlette-profiler
+# asgi-profiler
 
 <!-- markdownlint-disable MD033 -->
 <p align="center">
-  <a href="https://pypi.org/project/starlette-profiler/"><img alt="PyPI package" src="https://img.shields.io/pypi/v/starlette-profiler?color=%2334D058&label=pypi%20package"></a>
-  <a href="https://pypi.org/project/starlette-profiler/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/starlette-profiler.svg?color=%2334D058"></a>
-  <a href="https://pepy.tech/project/starlette-profiler"><img alt="Downloads" src="https://static.pepy.tech/badge/starlette-profiler"></a>
-  <a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/mmzeynalli/starlette-profiler"><img alt="Coverage" src="https://coverage-badge.samuelcolvin.workers.dev/mmzeynalli/starlette-profiler.svg"></a>
+  <a href="https://pypi.org/project/asgi-profiler/"><img alt="PyPI package" src="https://img.shields.io/pypi/v/asgi-profiler?color=%2334D058&label=pypi%20package"></a>
+  <a href="https://pypi.org/project/asgi-profiler/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/asgi-profiler.svg?color=%2334D058"></a>
+  <a href="https://pepy.tech/project/asgi-profiler"><img alt="Downloads" src="https://static.pepy.tech/badge/asgi-profiler"></a>
+  <a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/mmzeynalli/asgi-profiler"><img alt="Coverage" src="https://coverage-badge.samuelcolvin.workers.dev/mmzeynalli/asgi-profiler.svg"></a>
   <br>
-  <a href="https://github.com/mmzeynalli/starlette-profiler/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mmzeynalli/starlette-profiler/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/mmzeynalli/asgi-profiler/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mmzeynalli/asgi-profiler/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://www.gnu.org/licenses/mit.en.html"><img alt="License" src="https://img.shields.io/badge/license-MIT-16A34A"></a>
   <a href="https://github.com/astral-sh/ruff"><img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"></a>
-  <a href="https://github.com/mmzeynalli/starlette-profiler"><img alt="Typed" src="https://img.shields.io/badge/typed-py.typed-0F766E"></a>
+  <a href="https://github.com/mmzeynalli/asgi-profiler"><img alt="Typed" src="https://img.shields.io/badge/typed-py.typed-0F766E"></a>
 </p>
 <!-- markdownlint-enable MD033 -->
 
 ---
 
-Silk-style request and SQL profiling for **Starlette** and **FastAPI**, with
-**SQLAlchemy** and **SQLModel**. It records every request your application
-handles along with the SQL each one ran, and serves a browsable UI that tells
-you which endpoint is slow, whether it is the database, and which line of your
-code issued the query.
+Request and SQL profiling for **ASGI** applications — **Starlette** and
+**FastAPI**, with **SQLAlchemy** and **SQLModel**. It records every request your
+application handles along with the SQL each one ran, and serves a browsable UI
+that tells you which endpoint is slow, whether it is the database, and which
+line of your code issued the query.
 
 ```python
 from fastapi import FastAPI
-from starlette_profiler import install
+from asgi_profiler import install
 
 app = FastAPI()
 install(app)  # viewer at /profiler
@@ -67,7 +67,7 @@ migration.
 - **Works with async engines**, sync engines, several engines at once, and
   SQLModel — with no configuration for any of them.
 - **Two storage backends**, one of them shared across `uvicorn` workers.
-- Fully typed and `py.typed`, checked in CI with both `mypy` and `ty`.
+- Fully typed and `py.typed`, checked in CI with `ty`, and scanned with `bandit`.
 
 | | Supported |
 |---|---|
@@ -82,7 +82,7 @@ migration.
 ## Installation
 
 ```console
-pip install starlette-profiler
+pip install asgi-profiler
 ```
 
 Dependencies are `starlette`, `sqlalchemy` and `jinja2` — all of which you
@@ -92,7 +92,7 @@ already have.
 
 ```python
 from fastapi import FastAPI
-from starlette_profiler import install
+from asgi_profiler import install
 
 app = FastAPI()
 install(app)
@@ -169,7 +169,7 @@ def test_the_dashboard_has_no_n_plus_one(client):
 ## Configuration
 
 ```python
-from starlette_profiler import install
+from asgi_profiler import install
 
 install(
     app,
@@ -195,7 +195,7 @@ and **per process** — under `uvicorn --workers 4` the viewer shows you one
 worker's quarter of the traffic. If that matters, use SQLite:
 
 ```python
-from starlette_profiler import SQLiteStorage, install
+from asgi_profiler import SQLiteStorage, install
 
 install(app, storage=SQLiteStorage("profiler.db", max_requests=5000))
 ```
@@ -220,7 +220,7 @@ aggregation are supplied, and you can override them where your backend can do
 better:
 
 ```python
-from starlette_profiler import BaseStorage
+from asgi_profiler import BaseStorage
 
 
 class RedisStorage(BaseStorage):
@@ -234,7 +234,7 @@ class RedisStorage(BaseStorage):
 ### Reading a capture without the app
 
 ```console
-python -m starlette_profiler profiler.db      # viewer on :8080
+python -m asgi_profiler profiler.db      # viewer on :8080
 ```
 
 Capture in staging, read the file on your laptop. No application required, and
@@ -353,11 +353,22 @@ summary aggregated by route alongside per-query application stacks.
 ## Development
 
 ```console
-pip install -e ".[test,dev]" fastapi
-pytest
-ruff check . && ruff format --check .
-mypy && ty check src/starlette_profiler
+uv sync --all-extras
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+uv run ty check src/asgi_profiler
+uv run bandit -q -r src/asgi_profiler
 ```
+
+Building and publishing go through uv too:
+
+```console
+uv build --no-sources
+```
+
+Releases are cut by pushing a bare version tag (`0.1.0`); CI builds and
+publishes with
+`uv publish` over PyPI Trusted Publishing, so no token is stored anywhere.
 
 The suite covers recording, SQL capture, N+1 detection and collapsing, failed
 statements, stack capture and ordering across the greenlet boundary, header

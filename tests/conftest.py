@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from starlette_profiler import install_sql_hooks
+from asgi_profiler import install_sql_hooks
 
 
 @pytest.fixture(autouse=True)

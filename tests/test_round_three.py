@@ -22,7 +22,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import (
+from asgi_profiler import (
     MemoryStorage,
     Profile,
     Query,
@@ -31,7 +31,7 @@ from starlette_profiler import (
     group_queries,
     install,
 )
-from starlette_profiler.storage import IncompatibleCapture
+from asgi_profiler.storage import IncompatibleCapture
 
 
 async def endpoint(request):
@@ -125,9 +125,7 @@ def test_the_detail_page_is_well_formed(with_duplicates):
 
 def test_every_viewer_page_is_well_formed():
     storage = MemoryStorage()
-    storage.add(
-        make(1, route="/r", queries=[Query("SELECT 1", "()", 1.0, error="boom")])
-    )
+    storage.add(make(1, route="/r", queries=[Query("SELECT 1", "()", 1.0, error="boom")]))
     app = Starlette(routes=[Route("/", endpoint)])
     install(app, storage=storage)
 
@@ -226,10 +224,7 @@ def test_multiple_call_sites_are_disclosed():
     app = Starlette(routes=[Route("/", endpoint)])
     install(app, storage=storage)
     with TestClient(app) as client:
-        assert (
-            "2 different call sites"
-            in client.get("/profiler/request/000000000001").text
-        )
+        assert "2 different call sites" in client.get("/profiler/request/000000000001").text
 
 
 def test_empty_params_are_not_rendered():
@@ -294,7 +289,7 @@ def test_queued_profiles_survive_interpreter_exit(tmp_path):
     script = textwrap.dedent(f"""
         import sys
         sys.path.insert(0, {str(sys.path[0])!r})
-        from starlette_profiler import SQLiteStorage, Profile
+        from asgi_profiler import SQLiteStorage, Profile
         store = SQLiteStorage({str(path)!r})
         for i in range(100):
             p = Profile(id=f"{{i:012d}}", method="GET", path=f"/p{{i}}")
@@ -402,7 +397,7 @@ def test_an_incompatible_capture_is_reported_not_rebuilt(tmp_path):
 def test_the_cli_refuses_an_incompatible_capture(tmp_path, capsys):
     import sqlite3
 
-    from starlette_profiler.__main__ import main
+    from asgi_profiler.__main__ import main
 
     path = tmp_path / "cli.db"
     legacy = sqlite3.connect(path)
@@ -496,9 +491,7 @@ def test_statements_fuzz_agrees_across_backends(tmp_path):
 
     for case in range(60):
         memory = MemoryStorage(max_requests=1000)
-        store = SQLiteStorage(
-            tmp_path / f"fuzz{case}.db", max_requests=1000, background=False
-        )
+        store = SQLiteStorage(tmp_path / f"fuzz{case}.db", max_requests=1000, background=False)
         try:
             for idx in range(rng.randint(1, 12)):
                 queries = [

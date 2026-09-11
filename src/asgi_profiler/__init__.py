@@ -1,19 +1,22 @@
-"""starlette-profiler -- Silk-style request profiling for Starlette and FastAPI.
+"""asgi-profiler -- request and SQL profiling for ASGI applications.
 
     from fastapi import FastAPI
-    from starlette_profiler import install
+    from asgi_profiler import install
 
     app = FastAPI()
     install(app)            # viewer at /profiler
 
 Records every request the app handles along with the SQL each one ran, and
-serves a browsable UI. Works with SQLAlchemy and SQLModel, sync and async.
+serves a browsable UI. Works with Starlette, FastAPI, SQLAlchemy and
+SQLModel, sync and async.
 """
 
 from __future__ import annotations
 
 import contextlib
 import dataclasses
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _installed_version
 from typing import Any
 
 from .config import ProfilerConfig
@@ -66,7 +69,14 @@ __all__ = [
     "uninstall_sql_hooks",
 ]
 
-__version__ = "0.1.0"
+try:
+    #: Read from the installed distribution rather than repeated here. A
+    #: hand-maintained literal drifts from `pyproject.toml` silently, and the
+    #: release only compares the tag against the packaged version -- so a
+    #: wheel can ship saying 0.1.0 in its metadata and 0.0.1 in its code.
+    __version__ = _installed_version("asgi-profiler")
+except PackageNotFoundError:  # pragma: no cover - running from a source tree
+    __version__ = "0.0.0.dev0"
 
 #: Marker set on an app that already has the profiler, so a second
 #: `install()` is refused rather than silently doubling every count.
@@ -74,7 +84,7 @@ __version__ = "0.1.0"
 #: An attribute on the app rather than a set of `id()`s: CPython reuses the
 #: address of a collected object, so an id-keyed set reports a false positive
 #: as soon as an earlier app is garbage collected.
-_MARKER = "_starlette_profiler_installed"
+_MARKER = "_asgi_profiler_installed"
 
 
 class Profiler:

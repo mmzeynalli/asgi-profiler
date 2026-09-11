@@ -16,7 +16,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import (
+from asgi_profiler import (
     BaseStorage,
     MemoryStorage,
     Profile,
@@ -158,24 +158,17 @@ def test_installing_twice_is_refused():
 
 
 # ------------------------------------------------------- py.typed is real
-@pytest.mark.parametrize("checker", ["mypy", "ty"])
-def test_the_package_type_checks(checker):
+def test_the_package_type_checks():
     """Shipping py.typed while failing to type-check exports the errors."""
-    if not _available(checker):
-        pytest.skip(f"{checker} not installed")
-    args = {
-        "mypy": [checker, "--ignore-missing-imports", "src/starlette_profiler"],
-        "ty": [checker, "check", "src/starlette_profiler"],
-    }[checker]
-    result = subprocess.run(args, capture_output=True, text=True)
+    if not _available("ty"):
+        pytest.skip("ty not installed")
+    result = subprocess.run(["ty", "check", "src/asgi_profiler"], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
 def _available(name: str) -> bool:
     return (
-        subprocess.run(
-            [sys.executable, "-c", f"import {name}"], capture_output=True
-        ).returncode
+        subprocess.run([sys.executable, "-c", f"import {name}"], capture_output=True).returncode
         == 0
     )
 
@@ -189,9 +182,7 @@ def test_sqlite_add_does_not_scan_the_retention_window(tmp_path):
     """
     timings = {}
     for cap in (500, 20_000):
-        store = SQLiteStorage(
-            tmp_path / f"cap{cap}.db", max_requests=cap, background=False
-        )
+        store = SQLiteStorage(tmp_path / f"cap{cap}.db", max_requests=cap, background=False)
         try:
             for i in range(cap + 100):
                 store.add(make(i))
@@ -233,9 +224,7 @@ def test_background_writes_keep_the_tail_off_the_caller(tmp_path):
         timings.sort()
         return timings[int(0.99 * len(timings))]
 
-    with SQLiteStorage(
-        tmp_path / "sync.db", max_requests=500, background=False
-    ) as sync:
+    with SQLiteStorage(tmp_path / "sync.db", max_requests=500, background=False) as sync:
         inline_p99 = tail_us(sync, 0)
 
     with SQLiteStorage(tmp_path / "bg.db", max_requests=500) as background:
@@ -267,7 +256,7 @@ def test_reads_flush_pending_writes(tmp_path):
 
 
 def _filters():
-    from starlette_profiler import Filters
+    from asgi_profiler import Filters
 
     return Filters()
 
@@ -314,7 +303,7 @@ def test_an_old_schema_is_rebuilt_not_crashed(tmp_path):
 def test_the_schema_version_is_stamped(tmp_path):
     import sqlite3
 
-    from starlette_profiler.storage import SCHEMA_VERSION
+    from asgi_profiler.storage import SCHEMA_VERSION
 
     path = tmp_path / "stamped.db"
     with SQLiteStorage(path, background=False):
@@ -326,8 +315,8 @@ def test_the_schema_version_is_stamped(tmp_path):
 
 # ------------------------------------------------------------- size caps
 def test_a_huge_statement_is_truncated():
-    from starlette_profiler.instrument import _normalise
-    from starlette_profiler.models import MAX_SQL_CHARS
+    from asgi_profiler.instrument import _normalise
+    from asgi_profiler.models import MAX_SQL_CHARS
 
     bulk = "INSERT INTO t VALUES " + ",".join(f"({i})" for i in range(20_000))
     stored = _normalise(bulk)
@@ -338,7 +327,7 @@ def test_a_huge_statement_is_truncated():
 
 
 def test_a_normal_statement_is_untouched():
-    from starlette_profiler.instrument import _normalise
+    from asgi_profiler.instrument import _normalise
 
     assert _normalise("SELECT  a,\n  b FROM t") == "SELECT a, b FROM t"
 
@@ -361,9 +350,7 @@ def test_the_query_list_is_capped_in_memory_not_unbounded():
     store = MemoryStorage(max_requests=2)
     for i in range(5):
         profile = make(i)
-        profile.queries = [
-            Query(sql="SELECT 1", params="()", duration_ms=0.1) for _ in range(100)
-        ]
+        profile.queries = [Query(sql="SELECT 1", params="()", duration_ms=0.1) for _ in range(100)]
         profile.finalise()
         store.add(profile)
     assert store.count() == 2

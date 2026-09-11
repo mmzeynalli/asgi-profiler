@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from starlette_profiler import install
+from asgi_profiler import install
 
 
 class Base(DeclarativeBase):
@@ -114,3 +114,49 @@ def test_queries_outside_a_request_are_ignored(tmp_path):
         client.get("/noop")
 
     assert profiler.profiles[0].query_count == 0
+
+
+def test_sqlmodel_is_captured_with_no_special_support(tmp_path):
+    """The README claims SQLModel support; this is what makes that true.
+
+    `sqlmodel.create_engine` returns a SQLAlchemy `Engine` and
+    `sqlmodel.Session` subclasses `sqlalchemy.orm.Session`, so the class-level
+    cursor listeners fire unchanged. That is the whole argument -- worth an
+    executed assertion rather than a comment.
+    """
+    sqlmodel = pytest.importorskip("sqlmodel")
+
+    class Item(sqlmodel.SQLModel, table=True):
+        __tablename__ = "sqlmodel_item"
+        id: int | None = sqlmodel.Field(default=None, primary_key=True)
+        name: str
+
+    engine = sqlmodel.create_engine(f"sqlite:///{tmp_path / 'sm.db'}")
+    sqlmodel.SQLModel.metadata.create_all(engine)
+    with sqlmodel.Session(engine) as session:
+        session.add(Item(id=1, name="one"))
+        session.add(Item(id=2, name="two"))
+        session.commit()
+
+    async def items(request):
+        with sqlmodel.Session(engine) as session:
+            rows = session.exec(sqlmodel.select(Item)).all()
+            return JSONResponse([r.name for r in rows])
+
+    app = Starlette(routes=[Route("/items", items)])
+    profiler = install(app)
+
+    try:
+        with TestClient(app) as client:
+            assert client.get("/items").json() == ["one", "two"]
+
+        profile = profiler.profiles[0]
+        assert profile.query_count >= 1
+        assert any(q.sql.upper().startswith("SELECT") for q in profile.queries)
+        assert any("sqlmodel_item" in q.sql for q in profile.queries)
+        # and the stack still names this test, not sqlmodel's internals
+        stack = profile.queries[0].stack
+        assert any("test_async_and_engines" in frame for frame in stack)
+        assert not any("sqlmodel" in frame for frame in stack)
+    finally:
+        engine.dispose()

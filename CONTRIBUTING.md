@@ -1,11 +1,18 @@
 # Contributing
 
-```bash
-python -m venv .venv && . .venv/bin/activate
-pip install -e ".[test,dev]" fastapi
-pytest
-ruff check . && ruff format --check .
+```console
+uv sync --all-extras
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+uv run ty check src/asgi_profiler
+uv run bandit -q -r src/asgi_profiler
 ```
+
+`--all-extras` matters: without it FastAPI is missing and the tests covering
+FastAPI route handling skip in silence.
+
+`ruff format` also formats the Python inside fenced blocks in the markdown
+files, so a README snippet can fail the format check.
 
 ## Ground rules
 
@@ -21,10 +28,4 @@ ruff check . && ruff format --check .
   comment in the same commit.
 - Keep the profiler's own overhead in mind: anything added to the per-query
   path is paid for on every statement your users run.
-
-## Releasing
-
-1. Update `CHANGELOG.md` and the version in `pyproject.toml` and
-   `src/starlette_profiler/__init__.py`.
-2. `python -m build && twine check dist/*`
-3. Tag `vX.Y.Z` and push.
+- Branch names should be `feat/`, `chore/`, `fix/`

@@ -1,17 +1,21 @@
 name: Release
 
-# Publishes to PyPI when a v* tag is pushed. Uses Trusted Publishing, so no
-# API token is stored anywhere: configure the publisher once at
-# https://pypi.org/manage/project/starlette-profiler/settings/publishing/
-# with owner `mmzeynalli`, repository `starlette-profiler`, workflow
+# Publishes to PyPI when a v* tag is pushed, with uv. Uses Trusted
+# Publishing, so no API token is stored anywhere: configure the publisher
+# once at
+# https://pypi.org/manage/project/asgi-profiler/settings/publishing/
+# with owner `mmzeynalli`, repository `asgi-profiler`, workflow
 # `release.yml` and environment `pypi`.
 
 on:
   push:
-    tags: ["v*"]
+    tags:
 
 permissions:
   contents: read
+
+env:
+  UV_VERSION: "0.8.17"
 
 jobs:
   test:
@@ -22,28 +26,34 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[test]" fastapi
-      - run: pytest -q
+          enable-cache: true
+      - run: uv sync --all-extras --frozen
+      - run: uv run --no-sync pytest -q
 
   build:
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: "3.12"
-      - run: pip install build twine
-      - run: python -m build
-      - run: twine check --strict dist/*
+      # --no-sources so the artefact is built the way any other tool would
+      # build it, rather than against local path sources.
+      - run: uv build --no-sources
+      - run: uvx twine check --strict dist/*
       - name: The tag must match the packaged version
+        # Otherwise `git tag v0.2.0` on a 0.1.0 pyproject publishes 0.1.0
+        # under a 0.2.0 release, and the mismatch is permanent on PyPI.
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          VERSION=$(ls dist/*.tar.gz | sed -E 's/.*-([0-9][^-]*)\.tar\.gz/\1/')
-          echo "tag=$TAG packaged=$VERSION"
+          VERSION=$(uv version --short)
+          echo "tag=$TAG  packaged=$VERSION"
           test "$TAG" = "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
@@ -55,10 +65,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write  # Trusted Publishing
+      id-token: write  # required for Trusted Publishing
     steps:
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # `always` rather than `automatic`: if OIDC is not configured, fail
+      # loudly here instead of falling back to looking for a token that does
+      # not exist and reporting it as an auth error.
+      - run: uv publish --trusted-publishing always dist/*
