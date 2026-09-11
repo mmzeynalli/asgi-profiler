@@ -11,16 +11,8 @@ requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 keywords = [
-  "asgi",
-  "starlette",
-  "fastapi",
-  "sqlalchemy",
-  "sqlmodel",
-  "profiler",
-  "profiling",
-  "n+1",
-  "sql",
-  "silk",
+  "asgi", "starlette", "fastapi", "sqlalchemy", "sqlmodel",
+  "profiler", "profiling", "n+1", "sql", "silk",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -58,7 +50,13 @@ test = [
   "fastapi",
   "sqlmodel",
 ]
-dev = ["ruff", "ty", "bandit", "uvicorn"]
+dev = [
+  "ruff",
+  "ty",
+  "bandit",
+  "pre-commit",
+  "uvicorn",
+]
 
 [project.urls]
 Source = "https://github.com/mmzeynalli/asgi-profiler"
@@ -70,24 +68,20 @@ packages = ["src/asgi_profiler"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "src",
-  "tests",
-  "examples",
-  "README.md",
-  "LICENSE",
-  "CHANGELOG.md",
-  "CONTRIBUTING.md",
+  "src", "tests", "examples",
+  # assets: the README the sdist ships references the logo by relative path.
+  "assets",
+  "README.md", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md",
+  # CONTRIBUTING tells you to run it, so it has to be here to run.
+  ".pre-commit-config.yaml",
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 88
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-
-[tool.ruff.format]
-quote-style = "single"
+select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [project.scripts]
 asgi-profiler = "asgi_profiler.__main__:main"
@@ -107,4 +101,8 @@ branch = true
 source = ["src/asgi_profiler"]
 
 [tool.coverage.report]
-exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "\\.\\.\\.",
+]

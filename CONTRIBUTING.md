@@ -2,17 +2,41 @@
 
 ```console
 uv sync --all-extras
+uv run pre-commit install
+```
+
+That is the whole setup. `pre-commit install` wires up both stages at once:
+formatting, linting, types, security and the lockfile check on every commit,
+and the test suite on push.
+
+`--all-extras` matters: without it FastAPI is missing and the tests covering
+FastAPI route handling skip in silence.
+
+To run things by hand, or to see what the hooks will do before committing:
+
+```console
+uv run pre-commit run --all-files              # everything the commit hook runs
+uv run pre-commit run --all-files --hook-stage pre-push   # the above, plus pytest
+```
+
+The individual commands, if you want one of them on its own:
+
+```console
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 uv run ty check src/asgi_profiler
 uv run bandit -q -r src/asgi_profiler
 ```
 
-`--all-extras` matters: without it FastAPI is missing and the tests covering
-FastAPI route handling skip in silence.
+Two things worth knowing about the hooks:
 
-`ruff format` also formats the Python inside fenced blocks in the markdown
-files, so a README snippet can fail the format check.
+- The linters are `repo: local` and go through `uv run`, so they are the
+  versions in `uv.lock` — the same ones CI uses. The upstream `ruff-pre-commit`
+  mirror pins its own version, which drifts from the lockfile and lets a commit
+  pass locally and fail in CI on identical code.
+- `ruff format` also formats the Python inside fenced blocks in the markdown
+  files, so a README snippet can fail the format check. The hook fixes it in
+  place rather than just reporting it.
 
 ## Ground rules
 
@@ -28,4 +52,12 @@ files, so a README snippet can fail the format check.
   comment in the same commit.
 - Keep the profiler's own overhead in mind: anything added to the per-query
   path is paid for on every statement your users run.
-- Branch names should be `feat/`, `chore/`, `fix/`
+
+## Releasing
+
+1. `uv version --bump patch` (or `minor` / `major`). Nothing to mirror:
+   `__version__` is read from the installed distribution.
+2. Date the new section in `CHANGELOG.md`.
+3. Tag `X.Y.Z` (no `v` prefix) and push. `release.yml` re-runs the suite on every supported
+   Python, builds with `uv build --no-sources`, verifies the tag matches the
+   packaged version, and publishes with `uv publish` over Trusted Publishing.

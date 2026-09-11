@@ -1,0 +1,83 @@
+# Runs the same checks CI runs, before the commit exists rather than after.
+#
+# Install once per clone:
+#
+#     uv run --all-extras pre-commit install
+#
+# `default_install_hook_types` means that one command wires up both stages:
+# the fast checks on every commit, and the test suite on push.
+#
+# Why the linters are `repo: local` rather than the upstream mirrors:
+# `astral-sh/ruff-pre-commit` pins its own ruff version, so the pinned `rev`
+# here and the version in `uv.lock` drift apart the moment either is bumped --
+# and then a commit passes locally and the identical code fails in CI, which
+# is the one failure mode a pre-commit hook exists to prevent. Going through
+# `uv run` means the hook and CI are running the same build of the same tool,
+# resolved from the same lockfile, always.
+
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  # ------------------------------------------------------- format and lint
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        # Formats rather than checks: the point of the hook is that you never
+        # see the CI formatting failure at all. Also reformats Python inside
+        # fenced blocks in the markdown, which is how README.md broke CI once.
+        entry: uv run --all-extras ruff format
+        language: system
+        types_or: [python, markdown]
+        require_serial: true
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --all-extras ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      # ------------------------------------------------ types and security
+      # Whole-package, so no filenames are passed: `ty` needs the imports to
+      # resolve, and a bandit finding can sit in a file the commit did not
+      # touch. `files:` still limits *when* they fire.
+      - id: ty
+        name: ty check
+        entry: uv run --all-extras ty check src/asgi_profiler
+        language: system
+        pass_filenames: false
+        files: ^src/
+        require_serial: true
+
+      - id: bandit
+        name: bandit
+        # src only: the suite is full of asserts and temp paths, which bandit
+        # flags by design and which say nothing about the shipped package.
+        entry: uv run --all-extras bandit -q -r src/asgi_profiler
+        language: system
+        pass_filenames: false
+        files: ^src/
+        require_serial: true
+
+      - id: uv-lock
+        name: uv lock is in sync with pyproject.toml
+        # The check CI makes with `uv sync --locked`. Catching it here saves a
+        # round trip, because a stale lock fails every job at once.
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock)$
+
+  # ------------------------------------------------------- on push: tests
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        # Push, not commit: the suite takes seconds rather than milliseconds,
+        # and a hook slow enough to be worth skipping gets skipped.
+        entry: uv run --all-extras pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

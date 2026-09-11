@@ -7,7 +7,6 @@ dist/
 build/
 .ruff_cache/
 .pytest_cache/
-.mypy_cache/
 .ty_cache/
 example.db
 profiler.db

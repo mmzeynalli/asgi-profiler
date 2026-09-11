@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="asgi-profiler">
+  <title>asgi-profiler</title>
+  <!--
+    A request waterfall. The rule on the left is the start of the request;
+    each bar is a span placed against it, starting later than the one above.
+    Both parts are load bearing: without the rule and the staircase of
+    offsets, four stacked bars of differing widths centre themselves
+    optically and the mark reads as a hamburger menu.
+
+    The third bar is the point of it. It starts latest, reaches furthest
+    right, and is the only orange one: the span that cost you the request.
+    The colours are the viewer's own, from static/profiler.css, so the logo
+    and the product it stands for are the same two hues.
+  -->
+  <rect width="128" height="128" rx="28" fill="#1d2330"/>
+  <rect x="26" y="22" width="5" height="84" rx="2.5" fill="#949bab" opacity="0.6"/>
+  <rect x="40" y="25" width="54" height="16" rx="5" fill="#748ffc"/>
+  <rect x="50" y="47" width="34" height="16" rx="5" fill="#748ffc" opacity="0.7"/>
+  <rect x="60" y="69" width="46" height="16" rx="5" fill="#e8590c"/>
+  <rect x="70" y="91" width="22" height="16" rx="5" fill="#748ffc" opacity="0.7"/>
+</svg>

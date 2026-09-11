@@ -1,6 +1,11 @@
-# asgi-profiler
-
 <!-- markdownlint-disable MD033 -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img alt="asgi-profiler" src="assets/logo.svg" width="380">
+  </picture>
+</p>
+
 <p align="center">
   <a href="https://pypi.org/project/asgi-profiler/"><img alt="PyPI package" src="https://img.shields.io/pypi/v/asgi-profiler?color=%2334D058&label=pypi%20package"></a>
   <a href="https://pypi.org/project/asgi-profiler/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/asgi-profiler.svg?color=%2334D058"></a>
@@ -109,7 +114,7 @@ for profile in profiler.slowest(5):
     print(profile.route, profile.query_count, profile.duplicate_count)
 
 for statement in profiler.statements(10):
-    print(f'{statement.total_ms:.0f}ms  x{statement.count}  {statement.sql[:60]}')
+    print(f"{statement.total_ms:.0f}ms  x{statement.count}  {statement.sql[:60]}")
 ```
 
 > [!Note]
@@ -160,10 +165,10 @@ test fail a build when an endpoint regresses:
 
 ```python
 def test_the_dashboard_has_no_n_plus_one(client):
-    client.get('/dashboard')
-    trace = client.get('/profiler/requests.json').json()['requests'][0]
-    assert trace['duplicate_count'] == 0, 'N+1 reintroduced'
-    assert trace['query_count'] <= 5
+    client.get("/dashboard")
+    trace = client.get("/profiler/requests.json").json()["requests"][0]
+    assert trace["duplicate_count"] == 0, "N+1 reintroduced"
+    assert trace["query_count"] <= 5
 ```
 
 ## Configuration
@@ -173,18 +178,18 @@ from asgi_profiler import install
 
 install(
     app,
-    mount_path='/_perf',  # anywhere; every link is relative to the mount
+    mount_path="/_perf",  # anywhere; every link is relative to the mount
     max_requests=1000,
-    exclude_paths=['/healthz'],  # matched on segment boundaries
+    exclude_paths=["/healthz"],  # matched on segment boundaries
     capture_stacks=True,  # the per-query stacks; costs a little per query
     stack_depth=8,
     slow_request_ms=500,
     slow_query_ms=50,
     capture_headers=True,
-    response_header='x-profiler-id',  # None to add nothing
+    response_header="x-profiler-id",  # None to add nothing
     page_size=50,
     statement_limit=100,  # rows on the Statements page
-    authorize=lambda request: request.headers.get('x-key') == '...',
+    authorize=lambda request: request.headers.get("x-key") == "...",
 )
 ```
 
@@ -197,7 +202,7 @@ worker's quarter of the traffic. If that matters, use SQLite:
 ```python
 from asgi_profiler import SQLiteStorage, install
 
-install(app, storage=SQLiteStorage('profiler.db', max_requests=5000))
+install(app, storage=SQLiteStorage("profiler.db", max_requests=5000))
 ```
 
 History then survives restarts and every worker writes to the same file.
@@ -354,10 +359,16 @@ summary aggregated by route alongside per-query application stacks.
 
 ```console
 uv sync --all-extras
+uv run pre-commit install
 uv run pytest
-uv run ruff check . && uv run ruff format --check .
-uv run ty check src/asgi_profiler
-uv run bandit -q -r src/asgi_profiler
+```
+
+`pre-commit install` is the whole check setup: `ruff format`, `ruff check`,
+`ty`, `bandit` and a lockfile check run on every commit, and the suite runs on
+push. To run them without committing:
+
+```console
+uv run pre-commit run --all-files
 ```
 
 Building and publishing go through uv too:

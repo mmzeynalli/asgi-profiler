@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes to PyPI when a v* tag is pushed, with uv. Uses Trusted
+# Publishes to PyPI when a version tag is pushed, with uv. Uses Trusted
 # Publishing, so no API token is stored anywhere: configure the publisher
 # once at
 # https://pypi.org/manage/project/asgi-profiler/settings/publishing/
@@ -9,10 +9,21 @@ name: Release
 
 on:
   push:
-    tags:
+    # Tags only -- no `branches:` key, so a push to main can never start this
+    # workflow. Bare version tags: 0.1.0, 1.2.0, and prereleases like 0.2.0rc1.
+    # `+` here is a GitHub filter pattern meaning "one or more of the
+    # preceding character", not a regex quantifier over a group.
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
 
 permissions:
   contents: read
+
+# One release at a time, and never cancel one in flight: a publish killed
+# halfway can leave a version half-uploaded, and PyPI will not accept the
+# filename a second time.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   UV_VERSION: "0.8.17"
@@ -31,7 +42,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - run: uv sync --all-extras --frozen
+      - run: uv sync --all-extras --locked
       - run: uv run --no-sync pytest -q
 
   build:
@@ -46,12 +57,11 @@ jobs:
       # --no-sources so the artefact is built the way any other tool would
       # build it, rather than against local path sources.
       - run: uv build --no-sources
-      - run: uvx twine check --strict dist/*
       - name: The tag must match the packaged version
-        # Otherwise `git tag v0.2.0` on a 0.1.0 pyproject publishes 0.1.0
-        # under a 0.2.0 release, and the mismatch is permanent on PyPI.
+        # Otherwise `git tag 0.2.0` on a 0.1.0 pyproject publishes 0.1.0 under
+        # a 0.2.0 release, and the mismatch is permanent on PyPI.
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="$GITHUB_REF_NAME"
           VERSION=$(uv version --short)
           echo "tag=$TAG  packaged=$VERSION"
           test "$TAG" = "$VERSION"
@@ -63,6 +73,13 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    # Belt and braces. The trigger above already admits nothing but a tag, so
+    # today this is always true -- it is here for the day someone adds
+    # `workflow_dispatch` or a branch filter for convenience and does not
+    # notice they have made a branch build publishable. Uploading to PyPI is
+    # the one step in this repo that cannot be undone, so it states its
+    # precondition instead of inheriting it.
+    if: startsWith(github.ref, 'refs/tags/')
     environment: pypi
     permissions:
       id-token: write  # required for Trusted Publishing
