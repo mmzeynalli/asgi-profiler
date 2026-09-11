@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege by default. The coverage job widens this for itself.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -28,10 +32,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install
-        # --all-extras so the FastAPI-dependent tests actually run rather than
-        # skipping in silence, and --frozen so a stale lockfile fails here
-        # instead of being silently regenerated.
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --locked
       - name: Test
         run: uv run --no-sync pytest -q
 
@@ -44,11 +45,15 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --all-extras --frozen
+      - run: uv sync --all-extras --locked
       - run: uv run --no-sync ruff check .
       - run: uv run --no-sync ruff format --check .
       - name: Type check (ty)
         run: uv run --no-sync ty check src/asgi_profiler
+      - name: Security scan
+        # src only: the suite is full of asserts and temp paths, which bandit
+        # flags by design and which say nothing about the shipped package.
+        run: uv run --no-sync bandit -q -r src/asgi_profiler
 
   build:
     runs-on: ubuntu-latest
@@ -75,6 +80,9 @@ jobs:
   coverage:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -82,7 +90,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --all-extras --frozen
+      - run: uv sync --all-extras --locked
       - run: uv run --no-sync pytest -q --cov --cov-report=html --cov-fail-under=90
       - name: Publish the coverage report and badge
         env:

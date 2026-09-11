@@ -73,8 +73,6 @@ include = [
   "src",
   "tests",
   "examples",
-  # assets: the README the sdist ships references the logo by relative path.
-  "assets",
   "README.md",
   "LICENSE",
   "CHANGELOG.md",

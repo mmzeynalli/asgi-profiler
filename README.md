@@ -1,8 +1,9 @@
 <!-- markdownlint-disable MD033 -->
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img alt="asgi-profiler" src="assets/logo.svg" width="380">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/assets/logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/assets/logo.svg">
+    <img alt="asgi-profiler" src="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/assets/logo-960.png" width="380">
   </picture>
 </p>
 
@@ -40,6 +41,7 @@ migration.
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [Key features](#key-features)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -47,6 +49,7 @@ migration.
 - [JSON](#json)
 - [Configuration](#configuration)
 - [Storage](#storage)
+  - [Reading a capture without the app](#reading-a-capture-without-the-app)
 - [Security](#security)
 - [How it works](#how-it-works)
 - [Limits](#limits)
@@ -74,15 +77,15 @@ migration.
 - **Two storage backends**, one of them shared across `uvicorn` workers.
 - Fully typed and `py.typed`, checked in CI with `ty`, and scanned with `bandit`.
 
-| | Supported |
-|---|---|
-| Starlette | ✅ |
-| FastAPI | ✅ |
-| SQLAlchemy 2.x (sync) | ✅ |
-| SQLAlchemy 2.x (async) | ✅ |
-| SQLModel | ✅ |
-| Python 3.10 – 3.13 | ✅ |
-| Litestar | planned |
+|                        | Supported |
+| ---------------------- | --------- |
+| Starlette              | ✅         |
+| FastAPI                | ✅         |
+| SQLAlchemy 2.x (sync)  | ✅         |
+| SQLAlchemy 2.x (async) | ✅         |
+| SQLModel               | ✅         |
+| Python 3.10 – 3.13     | ✅         |
+| Litestar               | planned   |
 
 ## Installation
 
@@ -346,10 +349,10 @@ There is no *actively maintained* equivalent of
 [django-silk](https://github.com/jazzband/django-silk) for this stack, but
 there is prior art worth knowing about:
 
-| Project | Notes |
-|---|---|
+| Project                                                                   | Notes                                                                                     |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [fastapi-debug-toolbar](https://github.com/mongkok/fastapi-debug-toolbar) | A django-debug-toolbar port with a SQLAlchemy panel. FastAPI only; last release May 2024. |
-| [fastapi-sql-profiler](https://pypi.org/project/fastapi-sql-profiler/) | SQL profiling for FastAPI. |
+| [fastapi-sql-profiler](https://pypi.org/project/fastapi-sql-profiler/)    | SQL profiling for FastAPI.                                                                |
 
 This project differs in being Starlette-level rather than FastAPI-only, in not
 injecting a toolbar into your responses, and in offering a cross-request
