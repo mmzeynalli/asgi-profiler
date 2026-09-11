@@ -33,7 +33,7 @@ from typing import Any, Protocol
 
 from .models import PathSummary, Profile, Query, StatementSummary
 
-logger = logging.getLogger("asgi_profiler")
+logger = logging.getLogger('asgi_profiler')
 
 #: Aliases resolved at module scope. Inside the storage classes the name
 #: `list` is bound to the method, so a bare `-> list[Profile]` annotation
@@ -44,10 +44,10 @@ PathSummaries = list[PathSummary]
 StatementSummaries = list[StatementSummary]
 
 _ORDERINGS: dict[str, Any] = {
-    "recent": None,
-    "slowest": lambda p: -p.duration_ms,
-    "queries": lambda p: -p.query_count,
-    "sql": lambda p: -p.query_ms,
+    'recent': None,
+    'slowest': lambda p: -p.duration_ms,
+    'queries': lambda p: -p.query_count,
+    'sql': lambda p: -p.query_ms,
 }
 
 
@@ -55,18 +55,18 @@ _ORDERINGS: dict[str, Any] = {
 class Filters:
     """The viewer's filter state, in one object both backends understand."""
 
-    q: str = ""
-    method: str = ""
-    status: str = ""  # "ok" | "warn" | "err"
-    route: str = ""  # exact match on the route pattern
+    q: str = ''
+    method: str = ''
+    status: str = ''  # "ok" | "warn" | "err"
+    route: str = ''  # exact match on the route pattern
     min_ms: float | None = None
     only_duplicates: bool = False
     only_errors: bool = False
-    order: str = "recent"
+    order: str = 'recent'
 
     @classmethod
     def from_params(cls, params: Mapping[str, str]) -> Filters:
-        raw = (params.get("min_ms") or "").strip()
+        raw = (params.get('min_ms') or '').strip()
         try:
             min_ms = float(raw) if raw else None
         except ValueError:
@@ -75,20 +75,20 @@ class Filters:
             # `?min_ms=nan` compares False everywhere in Python and True
             # nowhere in SQL, so the two backends would disagree.
             min_ms = None
-        only = params.get("only", "")
-        order = params.get("order", "recent")
+        only = params.get('only', '')
+        order = params.get('order', 'recent')
         return cls(
             # Capped: SQLite raises "LIKE or GLOB pattern too complex" past a
             # few thousand characters, which would 500 the page rather than
             # return nothing.
-            q=(params.get("q") or "").strip()[:200],
-            method=(params.get("method") or "").strip().upper(),
-            status=(params.get("status") or "").strip(),
-            route=(params.get("route") or "").strip(),
+            q=(params.get('q') or '').strip()[:200],
+            method=(params.get('method') or '').strip().upper(),
+            status=(params.get('status') or '').strip(),
+            route=(params.get('route') or '').strip(),
             min_ms=min_ms,
-            only_duplicates=only == "duplicates",
-            only_errors=only == "errors",
-            order=order if order in _ORDERINGS else "recent",
+            only_duplicates=only == 'duplicates',
+            only_errors=only == 'errors',
+            order=order if order in _ORDERINGS else 'recent',
         )
 
     @property
@@ -110,11 +110,11 @@ class Filters:
             return False
         if self.route and profile.group != self.route:
             return False
-        if self.status == "err" and profile.status_code < 500:
+        if self.status == 'err' and profile.status_code < 500:
             return False
-        if self.status == "warn" and not (400 <= profile.status_code < 500):
+        if self.status == 'warn' and not (400 <= profile.status_code < 500):
             return False
-        if self.status == "ok" and not (200 <= profile.status_code < 300):
+        if self.status == 'ok' and not (200 <= profile.status_code < 300):
             return False
         if self.only_duplicates and not profile.duplicate_count:
             return False
@@ -328,10 +328,10 @@ INSERT OR IGNORE INTO meta (key, value) VALUES ('rows', 0);
 """
 
 _INSERT = (
-    "INSERT OR REPLACE INTO profiles (id, method, path, route, grp,"
-    " query_string, search_path, status_code, duration_ms, query_ms,"
-    " query_count, duplicate_count, error_count, recorded_at, client, payload)"
-    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    'INSERT OR REPLACE INTO profiles (id, method, path, route, grp,'
+    ' query_string, search_path, status_code, duration_ms, query_ms,'
+    ' query_count, duplicate_count, error_count, recorded_at, client, payload)'
+    ' VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
 )
 
 
@@ -359,7 +359,7 @@ class SQLiteStorage(BaseStorage):
 
     def __init__(
         self,
-        path: str | Path = "profiler.db",
+        path: str | Path = 'profiler.db',
         max_requests: int = 5000,
         *,
         background: bool = True,
@@ -376,20 +376,20 @@ class SQLiteStorage(BaseStorage):
         self._closed = False
 
         if read_only:
-            uri = f"file:{urllib.parse.quote(self.path)}?mode=ro"
+            uri = f'file:{urllib.parse.quote(self.path)}?mode=ro'
             self._conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
         else:
             self._conn = sqlite3.connect(self.path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         try:
             with self._lock:
-                self._conn.create_function("py_lower", 1, _lower, deterministic=True)
+                self._conn.create_function('py_lower', 1, _lower, deterministic=True)
                 if read_only:
                     self._check_schema()
                 else:
                     # WAL so several worker processes can write concurrently.
-                    self._conn.execute("PRAGMA journal_mode=WAL")
-                    self._conn.execute("PRAGMA synchronous=NORMAL")
+                    self._conn.execute('PRAGMA journal_mode=WAL')
+                    self._conn.execute('PRAGMA synchronous=NORMAL')
                     self._prepare_schema()
         except BaseException:
             # An __init__ that raises leaves no object for the caller to close,
@@ -405,7 +405,7 @@ class SQLiteStorage(BaseStorage):
             self._queue = queue.Queue()
             self._writer = threading.Thread(
                 target=self._drain_forever,
-                name="asgi-profiler-writer",
+                name='asgi-profiler-writer',
                 daemon=True,
             )
             self._writer.start()
@@ -425,16 +425,16 @@ class SQLiteStorage(BaseStorage):
         viewer -- opening someone's staging capture to look at it must not be
         able to delete it.
         """
-        version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        version = self._conn.execute('PRAGMA user_version').fetchone()[0]
         if version != SCHEMA_VERSION:
             raise IncompatibleCapture(
-                f"{self.path} was written by a different version of "
-                f"asgi-profiler (schema {version}, expected "
-                f"{SCHEMA_VERSION}). Re-capture with this version."
+                f'{self.path} was written by a different version of '
+                f'asgi-profiler (schema {version}, expected '
+                f'{SCHEMA_VERSION}). Re-capture with this version.'
             )
 
     def _prepare_schema(self) -> None:
-        version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        version = self._conn.execute('PRAGMA user_version').fetchone()[0]
         existing = self._conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='profiles'"
         ).fetchone()
@@ -443,12 +443,12 @@ class SQLiteStorage(BaseStorage):
             # disposable by nature, so rebuild rather than write a migration
             # for data nobody would miss.
             self._conn.executescript(
-                "DROP TABLE IF EXISTS profiles; DROP TABLE IF EXISTS statements;"
+                'DROP TABLE IF EXISTS profiles; DROP TABLE IF EXISTS statements;'
             )
         self._conn.executescript(_SCHEMA)
-        self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        self._conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
         self._conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES"
+            'INSERT OR REPLACE INTO meta (key, value) VALUES'
             " ('rows', (SELECT COUNT(*) FROM profiles))"
         )
         self._conn.commit()
@@ -478,7 +478,7 @@ class SQLiteStorage(BaseStorage):
         # cannot time out.
         while self._queue.unfinished_tasks:
             if time.monotonic() > deadline or not self._alive():
-                logger.warning("Timed out flushing profiles to %s", self.path)
+                logger.warning('Timed out flushing profiles to %s', self.path)
                 return
             time.sleep(0.001)
 
@@ -536,7 +536,7 @@ class SQLiteStorage(BaseStorage):
                 # a diagnostic tool that under-reports traffic in silence is
                 # the one failure nobody would think to check for.
                 logger.warning(
-                    "Could not write %d profile(s) to %s",
+                    'Could not write %d profile(s) to %s',
                     len(batch),
                     self.path,
                     exc_info=True,
@@ -554,9 +554,9 @@ class SQLiteStorage(BaseStorage):
         # matches what SQLite will actually store.
         deduped = {p.id: p for p in profiles}
         already = {
-            r["id"]
+            r['id']
             for r in self._conn.execute(
-                f"SELECT id FROM profiles WHERE id IN ({','.join('?' * len(deduped))})",  # nosec hardcoded_sql_expressions
+                f'SELECT id FROM profiles WHERE id IN ({",".join("?" * len(deduped))})',  # nosec hardcoded_sql_expressions
                 list(deduped),
             )
         }
@@ -566,24 +566,24 @@ class SQLiteStorage(BaseStorage):
             # profile's statement rows survive it -- unreachable, but still
             # aggregated, inflating every count on the statements page.
             self._conn.execute(
-                "DELETE FROM statements WHERE profile_seq IN"  # nosec hardcoded_sql_expressions
-                f" (SELECT seq FROM profiles WHERE id IN"
-                f" ({','.join('?' * len(already))}))",
+                'DELETE FROM statements WHERE profile_seq IN'  # nosec hardcoded_sql_expressions
+                f' (SELECT seq FROM profiles WHERE id IN'
+                f' ({",".join("?" * len(already))}))',
                 list(already),
             )
         self._conn.executemany(_INSERT, [values for values, _ in rows])
         seqs = {
-            r["id"]: r["seq"]
+            r['id']: r['seq']
             for r in self._conn.execute(
-                "SELECT id, seq FROM profiles WHERE id IN"  # nosec hardcoded_sql_expressions
-                f" ({','.join('?' * len(rows))})",
+                'SELECT id, seq FROM profiles WHERE id IN'  # nosec hardcoded_sql_expressions
+                f' ({",".join("?" * len(rows))})',
                 [p.id for _, p in rows],
             )
         }
         self._conn.executemany(
-            "INSERT INTO statements"
-            " (profile_seq, sql, grp, method, duration_ms, failed)"
-            " VALUES (?,?,?,?,?,?)",
+            'INSERT INTO statements'
+            ' (profile_seq, sql, grp, method, duration_ms, failed)'
+            ' VALUES (?,?,?,?,?,?)',
             [
                 (
                     seqs[p.id],
@@ -616,7 +616,7 @@ class SQLiteStorage(BaseStorage):
                 (delta,),
             )
         row = self._conn.execute("SELECT value FROM meta WHERE key = 'rows'").fetchone()
-        return int(row["value"]) if row else 0
+        return int(row['value']) if row else 0
 
     def _trim(self) -> None:
         """Drop the oldest rows above the cap, in O(overshoot).
@@ -639,14 +639,14 @@ class SQLiteStorage(BaseStorage):
         if excess <= 0:
             return
         row = self._conn.execute(
-            "SELECT seq FROM profiles ORDER BY seq ASC LIMIT 1 OFFSET ?",
+            'SELECT seq FROM profiles ORDER BY seq ASC LIMIT 1 OFFSET ?',
             (excess - 1,),
         ).fetchone()
         if row is None:  # pragma: no cover - another process trimmed first
             return
-        cutoff = row["seq"]
-        self._conn.execute("DELETE FROM statements WHERE profile_seq <= ?", (cutoff,))
-        deleted = self._conn.execute("DELETE FROM profiles WHERE seq <= ?", (cutoff,)).rowcount
+        cutoff = row['seq']
+        self._conn.execute('DELETE FROM statements WHERE profile_seq <= ?', (cutoff,))
+        deleted = self._conn.execute('DELETE FROM profiles WHERE seq <= ?', (cutoff,)).rowcount
         self._bump_rows(-max(0, deleted))
 
     def clear(self) -> None:
@@ -654,8 +654,8 @@ class SQLiteStorage(BaseStorage):
             return
         self.flush()
         with self._lock:
-            self._conn.execute("DELETE FROM profiles")
-            self._conn.execute("DELETE FROM statements")
+            self._conn.execute('DELETE FROM profiles')
+            self._conn.execute('DELETE FROM statements')
             self._conn.execute("UPDATE meta SET value = 0 WHERE key = 'rows'")
             self._conn.commit()
 
@@ -682,20 +682,20 @@ class SQLiteStorage(BaseStorage):
     def count(self) -> int:
         self.flush()
         with self._lock:
-            row = self._conn.execute("SELECT COUNT(*) AS n FROM profiles").fetchone()
-        return int(row["n"])
+            row = self._conn.execute('SELECT COUNT(*) AS n FROM profiles').fetchone()
+        return int(row['n'])
 
     def get(self, profile_id: str) -> Profile | None:
         self.flush()
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM profiles WHERE id = ?", (profile_id,)
+                'SELECT * FROM profiles WHERE id = ?', (profile_id,)
             ).fetchone()
         return _row_to_profile(row, with_queries=True) if row else None
 
     def list(self, *, limit: int | None = None, offset: int = 0) -> Profiles:
         self.flush()
-        sql = "SELECT * FROM profiles ORDER BY seq DESC LIMIT ? OFFSET ?"
+        sql = 'SELECT * FROM profiles ORDER BY seq DESC LIMIT ? OFFSET ?'
         with self._lock:
             rows = self._conn.execute(sql, (-1 if limit is None else limit, offset)).fetchall()
         return [_row_to_profile(r, with_queries=True) for r in rows]
@@ -706,9 +706,9 @@ class SQLiteStorage(BaseStorage):
         with self._lock:
             total = int(
                 self._conn.execute(
-                    f"SELECT COUNT(*) AS n FROM profiles {where}",  # nosec hardcoded_sql_expressions
+                    f'SELECT COUNT(*) AS n FROM profiles {where}',  # nosec hardcoded_sql_expressions
                     params,
-                ).fetchone()["n"]
+                ).fetchone()['n']
             )
             size = max(1, size)
             pages = max(1, -(-total // size))
@@ -717,13 +717,13 @@ class SQLiteStorage(BaseStorage):
             # durations page in an arbitrary order here and newest-first in
             # MemoryStorage, so the same data reads differently per backend.
             order = {
-                "recent": "seq DESC",
-                "slowest": "duration_ms DESC, seq DESC",
-                "queries": "query_count DESC, seq DESC",
-                "sql": "query_ms DESC, seq DESC",
-            }.get(filters.order, "seq DESC")
+                'recent': 'seq DESC',
+                'slowest': 'duration_ms DESC, seq DESC',
+                'queries': 'query_count DESC, seq DESC',
+                'sql': 'query_ms DESC, seq DESC',
+            }.get(filters.order, 'seq DESC')
             rows = self._conn.execute(
-                f"SELECT * FROM profiles {where} ORDER BY {order} LIMIT ? OFFSET ?",  # nosec hardcoded_sql_expressions
+                f'SELECT * FROM profiles {where} ORDER BY {order} LIMIT ? OFFSET ?',  # nosec hardcoded_sql_expressions
                 (*params, size, (number - 1) * size),
             ).fetchall()
         # The listing shows counters, never individual statements, so skip the
@@ -739,8 +739,8 @@ class SQLiteStorage(BaseStorage):
         self.flush()
         with self._lock:
             rows = self._conn.execute(
-                "SELECT method, grp, duration_ms, query_count, duplicate_count,"
-                " error_count FROM profiles"
+                'SELECT method, grp, duration_ms, query_count, duplicate_count,'
+                ' error_count FROM profiles'
             ).fetchall()
         # Aggregated in Python rather than SQL because percentiles need the
         # whole distribution and SQLite has no PERCENTILE_CONT. One narrow
@@ -748,17 +748,17 @@ class SQLiteStorage(BaseStorage):
         buckets: dict[tuple[str, str], PathSummary] = {}
         durations: dict[tuple[str, str], list[float]] = defaultdict(list)
         for row in rows:
-            key = (row["method"], row["grp"])
+            key = (row['method'], row['grp'])
             summary = buckets.get(key)
             if summary is None:
-                summary = buckets[key] = PathSummary(path=row["grp"], method=key[0])
-            duration = float(row["duration_ms"])
+                summary = buckets[key] = PathSummary(path=row['grp'], method=key[0])
+            duration = float(row['duration_ms'])
             summary.count += 1
             summary.total_ms += duration
             summary.max_ms = max(summary.max_ms, duration)
-            summary.total_queries += int(row["query_count"])
-            summary.total_duplicates += int(row["duplicate_count"])
-            summary.total_errors += int(row["error_count"])
+            summary.total_queries += int(row['query_count'])
+            summary.total_duplicates += int(row['duplicate_count'])
+            summary.total_errors += int(row['error_count'])
             durations[key].append(duration)
         for key, summary in buckets.items():
             summary.set_percentiles(durations[key])
@@ -768,30 +768,30 @@ class SQLiteStorage(BaseStorage):
         self.flush()
         with self._lock:
             rows = self._conn.execute(
-                "SELECT sql, COUNT(*) AS n, SUM(duration_ms) AS total,"
-                " MAX(duration_ms) AS worst, SUM(failed) AS failures,"
-                " COUNT(DISTINCT profile_seq) AS requests,"
-                " COUNT(DISTINCT grp) AS routes,"
-                " MIN(grp) AS a_route, MIN(method) AS a_method"
-                " FROM statements GROUP BY sql"
+                'SELECT sql, COUNT(*) AS n, SUM(duration_ms) AS total,'
+                ' MAX(duration_ms) AS worst, SUM(failed) AS failures,'
+                ' COUNT(DISTINCT profile_seq) AS requests,'
+                ' COUNT(DISTINCT grp) AS routes,'
+                ' MIN(grp) AS a_route, MIN(method) AS a_method'
+                ' FROM statements GROUP BY sql'
                 # `sql` as a tiebreaker so that a LIMIT returns the same rows
                 # here as in MemoryStorage. Equal totals are common with
                 # coarse timers, and a limit that depends on the backend is
                 # not an interchangeable API.
-                " ORDER BY total DESC, sql ASC LIMIT ?",
+                ' ORDER BY total DESC, sql ASC LIMIT ?',
                 (max(0, limit),),
             ).fetchall()
         return [
             StatementSummary(
-                sql=r["sql"],
-                count=int(r["n"]),
-                total_ms=float(r["total"] or 0.0),
-                max_ms=float(r["worst"] or 0.0),
-                requests=int(r["requests"]),
-                route_count=int(r["routes"]),
-                sample_route=r["a_route"] or "",
-                sample_method=r["a_method"] or "GET",
-                failures=int(r["failures"] or 0),
+                sql=r['sql'],
+                count=int(r['n']),
+                total_ms=float(r['total'] or 0.0),
+                max_ms=float(r['worst'] or 0.0),
+                requests=int(r['requests']),
+                route_count=int(r['routes']),
+                sample_route=r['a_route'] or '',
+                sample_method=r['a_method'] or 'GET',
+                failures=int(r['failures'] or 0),
             )
             for r in rows
         ]
@@ -808,16 +808,16 @@ def _search_text(profile: Profile) -> str:
 def _row_values(profile: Profile) -> tuple[Any, ...]:
     payload = json.dumps(
         {
-            "request_headers": profile.request_headers,
-            "response_headers": profile.response_headers,
-            "queries": [
+            'request_headers': profile.request_headers,
+            'response_headers': profile.response_headers,
+            'queries': [
                 {
-                    "sql": q.sql,
-                    "params": q.params,
-                    "duration_ms": q.duration_ms,
-                    "stack": q.stack,
-                    "is_duplicate": q.is_duplicate,
-                    "error": q.error,
+                    'sql': q.sql,
+                    'params': q.params,
+                    'duration_ms': q.duration_ms,
+                    'stack': q.stack,
+                    'is_duplicate': q.is_duplicate,
+                    'error': q.error,
                 }
                 for q in profile.queries
             ],
@@ -852,62 +852,62 @@ def _where(filters: Filters) -> tuple[str, tuple[Any, ...]]:
         # 16 ms at 20k rows against 3.7 ms for the pure-Python backend, which
         # is the opposite of the point of pushing the filter down.
         clauses.append("search_path LIKE ? ESCAPE '\\'")
-        needle = filters.q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        params.append(f"%{needle}%")
+        needle = filters.q.lower().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        params.append(f'%{needle}%')
     if filters.method:
-        clauses.append("method = ?")
+        clauses.append('method = ?')
         params.append(filters.method)
     if filters.route:
-        clauses.append("grp = ?")
+        clauses.append('grp = ?')
         params.append(filters.route)
-    if filters.status == "err":
-        clauses.append("status_code >= 500")
-    elif filters.status == "warn":
-        clauses.append("status_code >= 400 AND status_code < 500")
-    elif filters.status == "ok":
-        clauses.append("status_code >= 200 AND status_code < 300")
+    if filters.status == 'err':
+        clauses.append('status_code >= 500')
+    elif filters.status == 'warn':
+        clauses.append('status_code >= 400 AND status_code < 500')
+    elif filters.status == 'ok':
+        clauses.append('status_code >= 200 AND status_code < 300')
     if filters.only_duplicates:
-        clauses.append("duplicate_count > 0")
+        clauses.append('duplicate_count > 0')
     if filters.only_errors:
-        clauses.append("error_count > 0")
+        clauses.append('error_count > 0')
     if filters.min_ms is not None:
-        clauses.append("duration_ms >= ?")
+        clauses.append('duration_ms >= ?')
         params.append(filters.min_ms)
-    return ("WHERE " + " AND ".join(clauses)) if clauses else "", tuple(params)
+    return ('WHERE ' + ' AND '.join(clauses)) if clauses else '', tuple(params)
 
 
 def _row_to_profile(row: sqlite3.Row, *, with_queries: bool) -> Profile:
-    payload = json.loads(row["payload"]) if with_queries else {}
+    payload = json.loads(row['payload']) if with_queries else {}
     profile = Profile(
-        id=row["id"],
-        method=row["method"],
-        path=row["path"],
-        route=row["route"],
-        query_string=row["query_string"],
-        status_code=int(row["status_code"]),
-        duration_ms=float(row["duration_ms"]),
-        recorded_at=_parse_datetime(row["recorded_at"]),
-        request_headers=payload.get("request_headers", {}),
-        response_headers=payload.get("response_headers", {}),
-        client=row["client"],
+        id=row['id'],
+        method=row['method'],
+        path=row['path'],
+        route=row['route'],
+        query_string=row['query_string'],
+        status_code=int(row['status_code']),
+        duration_ms=float(row['duration_ms']),
+        recorded_at=_parse_datetime(row['recorded_at']),
+        request_headers=payload.get('request_headers', {}),
+        response_headers=payload.get('response_headers', {}),
+        client=row['client'],
         queries=[
             Query(
-                sql=q["sql"],
-                params=q["params"],
-                duration_ms=q["duration_ms"],
-                stack=q.get("stack", []),
-                is_duplicate=q.get("is_duplicate", False),
-                error=q.get("error"),
+                sql=q['sql'],
+                params=q['params'],
+                duration_ms=q['duration_ms'],
+                stack=q.get('stack', []),
+                is_duplicate=q.get('is_duplicate', False),
+                error=q.get('error'),
             )
-            for q in payload.get("queries", [])
+            for q in payload.get('queries', [])
         ],
     )
     # Read the counters back rather than recomputing them, so a listing row
     # stays correct even though its statements were not loaded.
-    profile.query_count = int(row["query_count"])
-    profile.query_ms = float(row["query_ms"])
-    profile.duplicate_count = int(row["duplicate_count"])
-    profile.error_count = int(row["error_count"])
+    profile.query_count = int(row['query_count'])
+    profile.query_ms = float(row['query_ms'])
+    profile.duplicate_count = int(row['duplicate_count'])
+    profile.error_count = int(row['error_count'])
     return profile
 
 
@@ -976,7 +976,7 @@ def aggregate_statements(profiles: Iterable[Profile], limit: int = 100) -> State
         row.requests = len(requests[sql])
         # `min` rather than "the first one seen": SQLite groups with MIN(), and
         # a sample that depends on insertion order is not the same API.
-        row.sample_route = min(routes[sql]) if routes[sql] else ""
-        row.sample_method = min(methods[sql]) if methods[sql] else "GET"
+        row.sample_route = min(routes[sql]) if routes[sql] else ''
+        row.sample_method = min(methods[sql]) if methods[sql] else 'GET'
     ordered = sorted(rows.values(), key=lambda r: (-r.total_ms, r.sql))
     return ordered[: max(0, limit)]

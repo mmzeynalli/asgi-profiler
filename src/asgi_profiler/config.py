@@ -9,12 +9,12 @@ from starlette.requests import Request
 
 #: Header names never stored, in lower case.
 DEFAULT_REDACTED_HEADERS = (
-    "authorization",
-    "proxy-authorization",
-    "cookie",
-    "set-cookie",
-    "x-api-key",
-    "x-auth-token",
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-auth-token',
 )
 
 
@@ -45,20 +45,20 @@ class ProfilerConfig:
             or keep it off outside development.
     """
 
-    mount_path: str = "/profiler"
+    mount_path: str = '/profiler'
     max_requests: int = 500
-    exclude_paths: Sequence[str] = ("/favicon.ico",)
+    exclude_paths: Sequence[str] = ('/favicon.ico',)
     capture_stacks: bool = True
     stack_depth: int = 8
     slow_request_ms: float = 500.0
     slow_query_ms: float = 50.0
     capture_headers: bool = True
     redacted_headers: Sequence[str] = DEFAULT_REDACTED_HEADERS
-    response_header: str | None = "x-profiler-id"
+    response_header: str | None = 'x-profiler-id'
     page_size: int = 50
     statement_limit: int = 100
     authorize: Callable[[Request], bool] | None = None
 
     def build_excludes(self) -> tuple[str, ...]:
-        paths = [self.mount_path.rstrip("/") or "/", *self.exclude_paths]
+        paths = [self.mount_path.rstrip('/') or '/', *self.exclude_paths]
         return tuple(dict.fromkeys(paths))

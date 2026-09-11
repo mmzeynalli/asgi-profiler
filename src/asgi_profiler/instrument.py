@@ -33,28 +33,28 @@ except ImportError:  # pragma: no cover - sync-only install
 #: often runs in a worker thread (anyio copies the context into it), so appends
 #: made there must land in an object the request task already holds.
 current_queries: contextvars.ContextVar[list[Query] | None] = contextvars.ContextVar(
-    "asgi_profiler_queries", default=None
+    'asgi_profiler_queries', default=None
 )
 
 _IGNORED_FRAME_PARTS = (
-    "/sqlalchemy/",
-    "\\sqlalchemy\\",
-    "/sqlmodel/",
-    "\\sqlmodel\\",
-    "/asgi_profiler/",
-    "\\asgi_profiler\\",
-    "/anyio/",
-    "\\anyio\\",
-    "/asyncio/",
-    "\\asyncio\\",
-    "/greenlet/",
-    "\\greenlet\\",
-    "/gevent/",
-    "\\gevent\\",
-    "/concurrent/futures/",
-    "\\concurrent\\futures\\",
-    "/threading.py",
-    "\\threading.py",
+    '/sqlalchemy/',
+    '\\sqlalchemy\\',
+    '/sqlmodel/',
+    '\\sqlmodel\\',
+    '/asgi_profiler/',
+    '\\asgi_profiler\\',
+    '/anyio/',
+    '\\anyio\\',
+    '/asyncio/',
+    '\\asyncio\\',
+    '/greenlet/',
+    '\\greenlet\\',
+    '/gevent/',
+    '\\gevent\\',
+    '/concurrent/futures/',
+    '\\concurrent\\futures\\',
+    '/threading.py',
+    '\\threading.py',
 )
 
 #: Live capture settings, read by the listeners at event time.
@@ -64,7 +64,7 @@ _IGNORED_FRAME_PARTS = (
 #: settings they honour must stay reconfigurable -- otherwise the first
 #: `install()` in a process would silently dictate `capture_stacks` for every
 #: application in it, including across tests.
-_settings: dict[str, Any] = {"capture_stacks": True, "stack_depth": 8}
+_settings: dict[str, Any] = {'capture_stacks': True, 'stack_depth': 8}
 
 _installed = False
 _listeners: list[tuple[str, Any]] = []
@@ -81,8 +81,8 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
     listeners themselves are only attached the first time.
     """
     global _installed
-    _settings["capture_stacks"] = capture_stacks
-    _settings["stack_depth"] = stack_depth
+    _settings['capture_stacks'] = capture_stacks
+    _settings['stack_depth'] = stack_depth
     if _installed:
         return
 
@@ -90,12 +90,12 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
     # SQLAlchemy calls this with a fixed positional signature we do not choose.
     def _before(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001, ARG001
         # A stack: a single connection can nest executions.
-        conn.info.setdefault("_profiler_started", []).append(time.perf_counter())
+        conn.info.setdefault('_profiler_started', []).append(time.perf_counter())
 
     # ANN001 missing-type-function-argument, ARG001 unused-function-argument:
     # same fixed signature as `_before`.
     def _after(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001, ARG001
-        started = conn.info.get("_profiler_started")
+        started = conn.info.get('_profiler_started')
         if not started:
             return
         _record(statement, parameters, (time.perf_counter() - started.pop()) * 1000)
@@ -109,10 +109,10 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
         is stranded on the connection forever, which on a pooled connection
         that sees repeated errors is an unbounded list.
         """
-        conn = getattr(context, "connection", None)
+        conn = getattr(context, 'connection', None)
         if conn is None or context.statement is None:
             return  # a connect-level failure: no cursor execution to close out
-        started = conn.info.get("_profiler_started")
+        started = conn.info.get('_profiler_started')
         if not started:
             return
         _record(
@@ -123,9 +123,9 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
         )
 
     for name, listener in (
-        ("before_cursor_execute", _before),
-        ("after_cursor_execute", _after),
-        ("handle_error", _error),
+        ('before_cursor_execute', _before),
+        ('after_cursor_execute', _after),
+        ('handle_error', _error),
     ):
         event.listen(Engine, name, listener)
         _listeners.append((name, listener))
@@ -153,19 +153,19 @@ def _record(statement: Any, parameters: Any, elapsed_ms: float, error: str | Non
             sql=_normalise(statement),
             params=_format_params(parameters),
             duration_ms=elapsed_ms,
-            stack=(_capture_stack(_settings["stack_depth"]) if _settings["capture_stacks"] else []),
+            stack=(_capture_stack(_settings['stack_depth']) if _settings['capture_stacks'] else []),
             error=error,
         )
     )
 
 
 def _normalise(statement: Any) -> str:
-    text = " ".join(str(statement).split())
+    text = ' '.join(str(statement).split())
     # `max_requests` bounds how many requests are kept, not how big they are.
     # An ORM bulk insert is a single statement tens of kilobytes long, and one
     # endpoint doing that can hold hundreds of megabytes in the ring buffer.
     if len(text) > MAX_SQL_CHARS:
-        return text[:MAX_SQL_CHARS] + f" ... [truncated, {len(text)} chars]"
+        return text[:MAX_SQL_CHARS] + f' ... [truncated, {len(text)} chars]'
     return text
 
 
@@ -173,15 +173,15 @@ def _format_params(parameters: Any) -> str:
     try:
         text = repr(parameters)
     except Exception:  # a parameter with a hostile __repr__
-        return "<unrepresentable>"
-    return text if len(text) <= 500 else text[:500] + " ..."
+        return '<unrepresentable>'
+    return text if len(text) <= 500 else text[:500] + ' ...'
 
 
 def _format_error(exc: BaseException | None) -> str:
     if exc is None:
-        return "error"
-    text = f"{type(exc).__name__}: {exc}"
-    return text if len(text) <= 500 else text[:500] + " ..."
+        return 'error'
+    text = f'{type(exc).__name__}: {exc}'
+    return text if len(text) <= 500 else text[:500] + ' ...'
 
 
 def _walk_all_frames() -> Iterator[tuple[str, int, str]]:
@@ -198,13 +198,13 @@ def _walk_all_frames() -> Iterator[tuple[str, int, str]]:
 
     if greenlet is None:
         return
-    current = getattr(greenlet.getcurrent(), "parent", None)
+    current = getattr(greenlet.getcurrent(), 'parent', None)
     while current is not None:
-        frame: Any = getattr(current, "gr_frame", None)
+        frame: Any = getattr(current, 'gr_frame', None)
         while frame is not None:
             yield frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name
             frame = frame.f_back
-        current = getattr(current, "parent", None)
+        current = getattr(current, 'parent', None)
 
 
 def _capture_stack(depth: int) -> list[str]:
@@ -226,7 +226,7 @@ def _capture_stack(depth: int) -> list[str]:
             break
         if any(part in filename for part in _IGNORED_FRAME_PARTS):
             continue
-        frames.append(f"{filename}:{lineno} in {name}")
+        frames.append(f'{filename}:{lineno} in {name}')
         if len(frames) >= depth:
             break
     frames.reverse()  # innermost last, matching a traceback

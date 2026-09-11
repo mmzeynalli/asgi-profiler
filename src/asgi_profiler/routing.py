@@ -16,9 +16,9 @@ from typing import Any
 from starlette.routing import Match
 from starlette.types import Scope
 
-logger = logging.getLogger("asgi_profiler")
+logger = logging.getLogger('asgi_profiler')
 
-__all__ = ["request_path", "route_path", "route_pattern"]
+__all__ = ['request_path', 'route_path', 'route_pattern']
 
 
 def request_path(scope: Scope) -> str:
@@ -31,13 +31,13 @@ def request_path(scope: Scope) -> str:
     every recorded path and, worse, stops the viewer's own mount from being
     excluded, so the profiler starts profiling its own UI.
     """
-    path = scope.get("path", "/")
-    root = (scope.get("root_path") or "").rstrip("/")
+    path = scope.get('path', '/')
+    root = (scope.get('root_path') or '').rstrip('/')
     if not root:
         return path
-    if path == root or path.startswith(root + "/"):
+    if path == root or path.startswith(root + '/'):
         return path  # already absolute
-    return f"{root}{path}"
+    return f'{root}{path}'
 
 
 def route_path(scope: Scope) -> str:
@@ -49,9 +49,9 @@ def route_path(scope: Scope) -> str:
     the viewer excluding itself.
     """
     path = request_path(scope)
-    root = (scope.get("root_path") or "").rstrip("/")
-    if root and (path == root or path.startswith(root + "/")):
-        return path[len(root) :] or "/"
+    root = (scope.get('root_path') or '').rstrip('/')
+    if root and (path == root or path.startswith(root + '/')):
+        return path[len(root) :] or '/'
     return path
 
 
@@ -71,10 +71,10 @@ def _pattern_from_router(scope: Scope, root_path: str) -> str:
     a request to `/api/u/7` comes back labelled with an unrelated top-level
     `/u/{name}`.
     """
-    routes = getattr(scope.get("router"), "routes", None)
+    routes = getattr(scope.get('router'), 'routes', None)
     if not routes:
-        return ""
-    return _walk_routes(routes, {**scope, "root_path": root_path}, "")
+        return ''
+    return _walk_routes(routes, {**scope, 'root_path': root_path}, '')
 
 
 def _walk_routes(routes: Any, scope: Scope, prefix: str) -> str:
@@ -83,7 +83,7 @@ def _walk_routes(routes: Any, scope: Scope, prefix: str) -> str:
     Taking the first match rather than the best one is deliberate -- it is
     exactly what `Router.app` does, so we name the route that actually ran.
     """
-    partial = ""
+    partial = ''
     for route in routes:
         try:
             match, child = route.matches(scope)
@@ -92,13 +92,13 @@ def _walk_routes(routes: Any, scope: Scope, prefix: str) -> str:
             # being profiled -- but skipping in total silence is how a whole
             # router quietly reports as unmatched. Say so at debug level; this
             # costs nothing until it actually happens.
-            logger.debug("route %r raised while matching", route, exc_info=True)
+            logger.debug('route %r raised while matching', route, exc_info=True)
             continue
         if match is Match.NONE:
             continue
 
-        path = getattr(route, "path", "")
-        nested = getattr(route, "routes", None)
+        path = getattr(route, 'path', '')
+        nested = getattr(route, 'routes', None)
         if nested:  # a Mount or Host: descend with the child scope it hands us
             found = _walk_routes(nested, {**scope, **child}, prefix + path)
             if found:
@@ -111,7 +111,7 @@ def _walk_routes(routes: Any, scope: Scope, prefix: str) -> str:
             continue
 
         if match is Match.FULL:
-            return prefix + path if path else ""
+            return prefix + path if path else ''
         if not partial and path:  # a method mismatch: a 405 still has a route
             partial = prefix + path
     return partial
@@ -126,11 +126,11 @@ def _pattern_from_params(scope: Scope) -> str:
     `str()` differs from the text in the URL (`{uid:int}` matching `007`)
     cannot be located this way, which is why the router is asked first.
     """
-    params = scope.get("path_params") or {}
+    params = scope.get('path_params') or {}
     if not params:
-        return ""
+        return ''
 
-    segments = request_path(scope).split("/")
+    segments = request_path(scope).split('/')
     consumed: set[int] = set()
     leftover: list[tuple[str, str]] = []
     for name, value in params.items():
@@ -139,22 +139,22 @@ def _pattern_from_params(scope: Scope) -> str:
             continue  # an empty value would match the '' before the leading /
         for index, segment in enumerate(segments):
             if index not in consumed and segment == text:
-                segments[index] = f"{{{name}}}"
+                segments[index] = f'{{{name}}}'
                 consumed.add(index)
                 break
         else:
             leftover.append((name, text))
 
-    path = "/".join(segments)
+    path = '/'.join(segments)
     # A `path:`-style converter matches across segments, so fall back to a
     # substring rewrite for anything not placed above.
     for name, text in leftover:
         if text in path:
-            path = path.replace(text, f"{{{name}}}", 1)
+            path = path.replace(text, f'{{{name}}}', 1)
     return path
 
 
-def route_pattern(scope: Scope, root_path: str = "") -> str:
+def route_pattern(scope: Scope, root_path: str = '') -> str:
     """The matched route pattern, e.g. ``/users/{user_id}``.
 
     Frameworks disagree about what they leave behind in the scope. FastAPI
@@ -172,13 +172,13 @@ def route_pattern(scope: Scope, root_path: str = "") -> str:
     happily declare the same relative path, so grouping on the bare pattern
     merges unrelated endpoints into one summary row.
     """
-    route = scope.get("route")
-    pattern = getattr(route, "path_format", None) or getattr(route, "path", None)
+    route = scope.get('route')
+    pattern = getattr(route, 'path_format', None) or getattr(route, 'path', None)
     if isinstance(pattern, str) and pattern:
         # `root_path` has by now accumulated every mount prefix crossed.
-        return (scope.get("root_path") or "").rstrip("/") + pattern
+        return (scope.get('root_path') or '').rstrip('/') + pattern
 
-    if scope.get("endpoint") is not None and not scope.get("path_params"):
+    if scope.get('endpoint') is not None and not scope.get('path_params'):
         # A concrete route with nothing to substitute: the path *is* the
         # pattern, and skipping the router walk keeps the common case free.
         # Requires an endpoint -- a raw ASGI mount and a 404 both arrive here
@@ -187,5 +187,5 @@ def route_pattern(scope: Scope, root_path: str = "") -> str:
 
     found = _pattern_from_router(scope, root_path)
     if found:
-        return root_path.rstrip("/") + found
+        return root_path.rstrip('/') + found
     return _pattern_from_params(scope)
