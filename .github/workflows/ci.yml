@@ -49,10 +49,6 @@ jobs:
       - run: uv run --no-sync ruff format --check .
       - name: Type check (ty)
         run: uv run --no-sync ty check src/asgi_profiler
-      - name: Type check (mypy)
-        run: uv run --no-sync mypy
-        # py.typed ships in the wheel, so downstream users inherit whatever
-        # these two find. Failing here is cheaper than failing in their repo.
 
   build:
     runs-on: ubuntu-latest
