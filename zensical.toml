@@ -1,6 +1,6 @@
 [project]
 site_name = "asgi-profiler"
-site_url = "https://mmzeynalli.github.io/asgi-profiler/"
+site_url = "https://asgi-profiler.netlify.app/"
 site_description = "Request and SQL profiling for ASGI apps: Starlette, FastAPI, SQLAlchemy"
 site_author = "Miradil Zeynalli"
 

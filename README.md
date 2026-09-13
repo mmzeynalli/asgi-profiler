@@ -1,15 +1,5 @@
 <!-- markdownlint-disable MD033 -->
 <p align="center">
-  <!-- Absolute raw.githubusercontent URLs, never relative paths: PyPI embeds
-       this README into the package metadata and serves it from pypi.org, where
-       `docs/assets/logo.svg` resolves to nothing and the logo is a broken image.
-       The `<img>` is deliberately the PNG. PyPI sanitises the README against an
-       allow-list that has `<picture>` and `<img>` on it but not `<source>`, so
-       PyPI drops the sources and shows the `<img>`, while GitHub honours them
-       and gets the crisp SVG in either theme. A data: URI is not an option
-       either: the sanitiser permits only http, https and mailto.
-       Keep this comment free of blank lines -- one blank line inside an HTML
-       block ends the block, and the rest of the header renders as nothing. -->
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/logo-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/logo.svg">
@@ -49,10 +39,6 @@ install(app)  # viewer at /profiler
 That is the whole integration. No settings module, no database table, no
 migration.
 
-<!-- Absolute raw.githubusercontent URLs for the same reason as the logo: PyPI
-     serves this README from pypi.org, where a relative path is a broken image.
-     `<source>` is stripped by PyPI's sanitiser, so the `<img>` carries the
-     light shot and GitHub swaps in the dark one. No blank lines in here. -->
 <!-- markdownlint-disable MD033 -->
 <p align="center">
   <picture>
@@ -88,6 +74,7 @@ which line made it slow.
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [Key features](#key-features)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -95,6 +82,7 @@ which line made it slow.
 - [JSON](#json)
 - [Configuration](#configuration)
 - [Storage](#storage)
+  - [Reading a capture without the app](#reading-a-capture-without-the-app)
 - [Security](#security)
 - [How it works](#how-it-works)
 - [Limits](#limits)
@@ -125,15 +113,15 @@ which line made it slow.
 - **Two storage backends**, one of them shared across `uvicorn` workers.
 - Fully typed and `py.typed`, checked in CI with `ty`, and scanned with `bandit`.
 
-| | Supported |
-|---|---|
-| Starlette | ✅ |
-| FastAPI | ✅ |
-| SQLAlchemy 2.x (sync) | ✅ |
-| SQLAlchemy 2.x (async) | ✅ |
-| SQLModel | ✅ |
-| Python 3.10 – 3.13 | ✅ |
-| Litestar | planned |
+|                        | Supported |
+| ---------------------- | --------- |
+| Starlette              | ✅         |
+| FastAPI                | ✅         |
+| SQLAlchemy 2.x (sync)  | ✅         |
+| SQLAlchemy 2.x (async) | ✅         |
+| SQLModel               | ✅         |
+| Python 3.10 – 3.13     | ✅         |
+| Litestar               | planned   |
 
 ## Installation
 
@@ -397,10 +385,10 @@ There is no *actively maintained* equivalent of
 [django-silk](https://github.com/jazzband/django-silk) for this stack, but
 there is prior art worth knowing about:
 
-| Project | Notes |
-|---|---|
+| Project                                                                   | Notes                                                                                     |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [fastapi-debug-toolbar](https://github.com/mongkok/fastapi-debug-toolbar) | A django-debug-toolbar port with a SQLAlchemy panel. FastAPI only; last release May 2024. |
-| [fastapi-sql-profiler](https://pypi.org/project/fastapi-sql-profiler/) | SQL profiling for FastAPI. |
+| [fastapi-sql-profiler](https://pypi.org/project/fastapi-sql-profiler/)    | SQL profiling for FastAPI.                                                                |
 
 This project differs in being Starlette-level rather than FastAPI-only, in not
 injecting a toolbar into your responses, and in offering a cross-request
