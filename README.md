@@ -1,9 +1,19 @@
 <!-- markdownlint-disable MD033 -->
 <p align="center">
+  <!-- Absolute raw.githubusercontent URLs, never relative paths: PyPI embeds
+       this README into the package metadata and serves it from pypi.org, where
+       `docs/assets/logo.svg` resolves to nothing and the logo is a broken image.
+       The `<img>` is deliberately the PNG. PyPI sanitises the README against an
+       allow-list that has `<picture>` and `<img>` on it but not `<source>`, so
+       PyPI drops the sources and shows the `<img>`, while GitHub honours them
+       and gets the crisp SVG in either theme. A data: URI is not an option
+       either: the sanitiser permits only http, https and mailto.
+       Keep this comment free of blank lines -- one blank line inside an HTML
+       block ends the block, and the rest of the header renders as nothing. -->
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/assets/logo-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/assets/logo.svg">
-    <img alt="asgi-profiler" src="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/assets/logo-960.png" width="380">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/logo.svg">
+    <img alt="asgi-profiler" src="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/logo-960.png" width="380">
   </picture>
 </p>
 
@@ -39,9 +49,45 @@ install(app)  # viewer at /profiler
 That is the whole integration. No settings module, no database table, no
 migration.
 
+<!-- Absolute raw.githubusercontent URLs for the same reason as the logo: PyPI
+     serves this README from pypi.org, where a relative path is a broken image.
+     `<source>` is stripped by PyPI's sanitiser, so the `<img>` carries the
+     light shot and GitHub swaps in the dark one. No blank lines in here. -->
+<!-- markdownlint-disable MD033 -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/screenshot-detail-dark.png">
+    <img alt="A request detail page: 68.9 ms total, 57.6 ms of it in SQL, 14 queries of which 11 are duplicates, and the three-frame stack naming the line that issued the repeated statement" src="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/screenshot-detail.png" width="820">
+  </picture>
+</p>
+<!-- markdownlint-enable MD033 -->
+
+One endpoint, 68.9 ms, and **57.6 ms of it inside SQL**. The same statement ran
+twelve times because a loop asked the database once per line item — and the
+stack on that statement names the three frames that did it, ending at
+`repository.py:20`. That is the whole point: not that the request was slow, but
+which line made it slow.
+
+<!-- markdownlint-disable MD033 -->
+<details>
+<summary>The request list, and the per-route summary</summary>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/screenshot-requests-dark.png">
+    <img alt="The request list, sorted slowest first, with N+1 badges and route patterns under each literal path" src="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/screenshot-requests.png" width="820">
+  </picture>
+</p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/screenshot-summary-dark.png">
+    <img alt="Summary by route: calls, p50, p95, p99, max, total time, average queries, duplicates and SQL errors per route pattern" src="https://raw.githubusercontent.com/mmzeynalli/asgi-profiler/main/docs/assets/screenshot-summary.png" width="820">
+  </picture>
+</p>
+</details>
+<!-- markdownlint-enable MD033 -->
+
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
 - [Key features](#key-features)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -49,7 +95,6 @@ migration.
 - [JSON](#json)
 - [Configuration](#configuration)
 - [Storage](#storage)
-  - [Reading a capture without the app](#reading-a-capture-without-the-app)
 - [Security](#security)
 - [How it works](#how-it-works)
 - [Limits](#limits)
@@ -74,18 +119,21 @@ migration.
   regresses.
 - **Works with async engines**, sync engines, several engines at once, and
   SQLModel — with no configuration for any of them.
+- **Filter what you profile.** `include_regex` / `exclude_regex`, plus
+  `@profiler_exclude` and `@profiler_include` for a single route. An excluded
+  request is skipped before routing, so a health check costs nothing.
 - **Two storage backends**, one of them shared across `uvicorn` workers.
 - Fully typed and `py.typed`, checked in CI with `ty`, and scanned with `bandit`.
 
-|                        | Supported |
-| ---------------------- | --------- |
-| Starlette              | ✅         |
-| FastAPI                | ✅         |
-| SQLAlchemy 2.x (sync)  | ✅         |
-| SQLAlchemy 2.x (async) | ✅         |
-| SQLModel               | ✅         |
-| Python 3.10 – 3.13     | ✅         |
-| Litestar               | planned   |
+| | Supported |
+|---|---|
+| Starlette | ✅ |
+| FastAPI | ✅ |
+| SQLAlchemy 2.x (sync) | ✅ |
+| SQLAlchemy 2.x (async) | ✅ |
+| SQLModel | ✅ |
+| Python 3.10 – 3.13 | ✅ |
+| Litestar | planned |
 
 ## Installation
 
@@ -349,10 +397,10 @@ There is no *actively maintained* equivalent of
 [django-silk](https://github.com/jazzband/django-silk) for this stack, but
 there is prior art worth knowing about:
 
-| Project                                                                   | Notes                                                                                     |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Project | Notes |
+|---|---|
 | [fastapi-debug-toolbar](https://github.com/mongkok/fastapi-debug-toolbar) | A django-debug-toolbar port with a SQLAlchemy panel. FastAPI only; last release May 2024. |
-| [fastapi-sql-profiler](https://pypi.org/project/fastapi-sql-profiler/)    | SQL profiling for FastAPI.                                                                |
+| [fastapi-sql-profiler](https://pypi.org/project/fastapi-sql-profiler/) | SQL profiling for FastAPI. |
 
 This project differs in being Starlette-level rather than FastAPI-only, in not
 injecting a toolbar into your responses, and in offering a cross-request

@@ -9,6 +9,7 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from . import rules
 from .config import ProfilerConfig
 from .instrument import current_queries
 from .models import Profile, Query
@@ -36,6 +37,8 @@ class ProfilerMiddleware:
         self.storage = storage
         self.config = config or ProfilerConfig()
         self._excludes = self.config.build_excludes()
+        self._patterns = self.config.compiled_patterns()
+        self._excludes_key = self._exclude_key()
         self._redacted = {h.lower() for h in self.config.redacted_headers}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -45,10 +48,15 @@ class ProfilerMiddleware:
 
         original_root = scope.get("root_path", "")
         full_path = request_path(scope)
-        # Match exclusions against the app-relative path: `mount_path` and
-        # `exclude_paths` are written against the application's own routing
+        # Match against the app-relative path: `mount_path`, `exclude_paths`
+        # and the regexes are written against the application's own routing
         # table, not against whatever prefix it is deployed under.
-        if self._excluded(route_path(scope)):
+        allowed = self._path_allows(route_path(scope))
+        if not allowed and not rules.any_includes():
+            # Nothing in this process can flip that decision later, so skip
+            # before allocating a profile or capturing a single query. The
+            # moment one `@profiler_include` exists anywhere, this shortcut
+            # stops being sound and the decision moves below the response.
             await self.app(scope, receive, send)
             return
 
@@ -103,30 +111,57 @@ class ProfilerMiddleware:
             profile.route = route_pattern(scope, original_root)
             profile.finalise()
             current_queries.reset(token)
-            try:
-                self.storage.add(profile)
-            except Exception:  # pragma: no cover - a wedged backend
-                # The response has already gone out. A full disk or a locked
-                # database must not turn every successful request into a
-                # logged ASGI exception, and must never be able to take the
-                # application down -- a profiler is not load-bearing.
-                logger.warning("Could not record profile", exc_info=True)
+            # Guard rather than an early `return`: a bare return inside
+            # `finally` swallows whatever exception is in flight, so a handler
+            # that raised would have been reported as a clean response.
+            if self._keep(scope, allowed):
+                self._store(profile)
+
+    def _store(self, profile: Profile) -> None:
+        try:
+            self.storage.add(profile)
+        except Exception:  # pragma: no cover - a wedged backend
+            # The response has already gone out. A full disk or a locked
+            # database must not turn every successful request into a logged
+            # ASGI exception, and must never be able to take the application
+            # down -- a profiler is not load-bearing.
+            logger.warning("Could not record profile", exc_info=True)
 
     # -- helpers ---------------------------------------------------------
-    def _excluded(self, path: str) -> bool:
-        """Match on segment boundaries.
+    def _keep(self, scope: Scope, allowed: bool) -> bool:
+        """The final verdict, once routing has named the endpoint.
 
-        A bare `startswith` would make the default `/profiler` mount swallow an
-        application's own `/profiler-admin`, silently and with no error --
-        which reads to the user as "the profiler is broken".
+        A decorator on the endpoint is decisive in both directions -- it is the
+        most specific statement of intent available, so it outranks every
+        pattern. Only when there is no decorator does the path-based decision
+        made before routing stand.
         """
-        for prefix in self._excludes:
-            trimmed = prefix.rstrip("/")
-            if not trimmed:
-                return True  # excluded at the root
-            if path == trimmed or path.startswith(trimmed + "/"):
-                return True
-        return False
+        decided = rules.endpoint_decision(scope)
+        if decided is not None:
+            return decided
+        return allowed
+
+    def _exclude_key(self) -> tuple[Any, ...]:
+        return (
+            self.config.mount_path,
+            tuple(self.config.exclude_paths),
+            self.config.include_regex,
+            self.config.exclude_regex,
+        )
+
+    def _path_allows(self, path: str) -> bool:
+        key = self._exclude_key()
+        if key != self._excludes_key:
+            self._excludes_key = key
+            self._excludes = self.config.build_excludes()
+            self._patterns = self.config.compiled_patterns()
+        include_re, exclude_re = self._patterns
+        return rules.path_allows(
+            path,
+            excludes=self._excludes,
+            include_re=include_re,
+            exclude_re=exclude_re,
+        )
 
     def _headers(self, raw: Any) -> dict[str, str]:
         out: dict[str, str] = {}

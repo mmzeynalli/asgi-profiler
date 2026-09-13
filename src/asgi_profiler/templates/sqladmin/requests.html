@@ -1,0 +1,136 @@
+{% extends "sqladmin/layout.html" %}
+{# Tabler markup, not the standalone viewer's stylesheet: inside SQLAdmin the
+   page should look like SQLAdmin, and inherit its theme and dark mode. #}
+{% block content %}
+<div class="container-fluid">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Profiler</h3>
+      <ul class="nav nav-pills ms-3">
+        <li class="nav-item"><a class="nav-link active" href="{{ base }}">Requests</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ base }}/summary">Summary</a></li>
+      </ul>
+      <div class="ms-auto d-flex align-items-center">
+        <span class="text-secondary me-3">{{ page.total }} recorded</span>
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                data-bs-toggle="modal" data-bs-target="#profiler-clear"
+                {% if not page.total %}disabled{% endif %}>Clear</button>
+      </div>
+    </div>
+
+    {# Tabler/Bootstrap modal, the same confirmation pattern SQLAdmin uses for
+       deletes, so the button does not silently throw away the history on a
+       misclick. #}
+    <div class="modal fade" id="profiler-clear" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-body text-center py-4">
+            <h3>Clear the recorded history?</h3>
+            <div class="text-secondary">
+              All {{ page.total }} recorded request{{ '' if page.total == 1 else 's' }}
+              will be discarded. This cannot be undone.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-link link-secondary me-auto"
+                    data-bs-dismiss="modal">Cancel</button>
+            <form method="post" action="{{ base }}/clear">
+              <button type="submit" class="btn btn-danger">Clear</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body border-bottom py-3">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-auto">
+          <input type="text" class="form-control" name="q" value="{{ filters.q }}"
+                 placeholder="Path contains…">
+        </div>
+        <div class="col-auto">
+          <select class="form-select" name="order">
+            {% for value, label in [("recent", "Most recent"), ("slowest", "Slowest"),
+                                    ("queries", "Most queries"), ("sql", "Most SQL time")] %}
+            <option value="{{ value }}" {% if filters.order == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto">
+          <select class="form-select" name="only">
+            <option value="">Everything</option>
+            <option value="duplicates" {% if filters.only_duplicates %}selected{% endif %}>N+1 only</option>
+            <option value="errors" {% if filters.only_errors %}selected{% endif %}>SQL errors only</option>
+          </select>
+        </div>
+        <div class="col-auto"><button type="submit" class="btn btn-primary">Apply</button></div>
+        <div class="col-auto"><a href="{{ base }}" class="btn btn-link">Reset</a></div>
+      </form>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead>
+          <tr>
+            <th>Method</th><th>Path</th><th>Status</th>
+            <th class="text-end">Time</th><th class="text-end">SQL</th>
+            <th class="text-end">Queries</th><th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for profile in page.items %}
+          <tr>
+            <td><span class="badge bg-blue-lt">{{ profile.method }}</span></td>
+            <td>
+              <a href="{{ base }}/request/{{ profile.id }}">{{ profile.full_path }}</a>
+              {% if profile.duplicate_count %}
+              <span class="badge bg-orange-lt ms-1"
+                    title="{{ profile.duplicate_count }} repeated statements">
+                N+1 &times;{{ profile.duplicate_count }}</span>
+              {% endif %}
+              {% if profile.error_count %}
+              <span class="badge bg-red-lt ms-1">{{ profile.error_count }} SQL error(s)</span>
+              {% endif %}
+              {% if profile.group and profile.group != profile.path %}
+              <div class="text-secondary small">{{ profile.group }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge {% if profile.status_code >= 500 %}bg-red-lt
+                {%- elif profile.status_code >= 400 %}bg-orange-lt
+                {%- else %}bg-green-lt{% endif %}">{{ profile.status_code }}</span>
+            </td>
+            <td class="text-end {% if profile.duration_ms >= config.slow_request_ms %}text-danger fw-bold{% endif %}">
+              {{ "%.1f"|format(profile.duration_ms) }} ms
+            </td>
+            <td class="text-end text-secondary">{{ "%.1f"|format(profile.query_ms) }} ms</td>
+            <td class="text-end">{{ profile.query_count }}</td>
+            <td class="text-secondary">{{ profile.recorded_at.strftime("%H:%M:%S") }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center text-secondary py-4">
+            Nothing recorded yet. Make a request to your application.
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page.pages > 1 %}
+    <div class="card-footer d-flex align-items-center">
+      <p class="m-0 text-secondary">
+        Showing {{ page.first_index }} to {{ page.last_index }} of {{ page.total }}
+      </p>
+      <ul class="pagination m-0 ms-auto">
+        <li class="page-item {% if not page.has_previous %}disabled{% endif %}">
+          <a class="page-link" href="{{ base }}?page={{ page.number - 1 }}&amp;order={{ filters.order }}">prev</a>
+        </li>
+        <li class="page-item {% if not page.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ base }}?page={{ page.number + 1 }}&amp;order={{ filters.order }}">next</a>
+        </li>
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

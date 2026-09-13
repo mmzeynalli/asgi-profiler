@@ -52,13 +52,11 @@ test = [
   "httpx2",
   "aiosqlite",
   "anyio",
-  # FastAPI and SQLModel are both claimed as supported in the README. Without
-  # them here the tests covering them skip in silence, which is the worst of
-  # both: a support claim resting on nothing.
   "fastapi",
   "sqlmodel",
+  "sqladmin",
 ]
-dev = ["ruff", "ty", "bandit", "pre-commit", "uvicorn"]
+dev = ["ruff", "ty", "bandit", "pre-commit", "uvicorn", "zensical"]
 
 [project.urls]
 Source = "https://github.com/mmzeynalli/asgi-profiler"
@@ -97,6 +95,8 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# `__main__.py` is the CLI, and its two prints are the program's *output* --
+# the row count and the URL it is serving -- not diagnostics.
 "src/asgi_profiler/__main__.py" = ["T201"]
 
 [project.scripts]

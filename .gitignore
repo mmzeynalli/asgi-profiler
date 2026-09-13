@@ -16,3 +16,8 @@ profiler.db
 htmlcov/
 _to_delete/
 REVIEW.md
+# Zensical build output
+site/
+.zensical/
+# a venv created inside docs/ would be copied into the built site
+docs/.venv/

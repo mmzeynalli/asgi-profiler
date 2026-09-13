@@ -1,0 +1,58 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Summary by route</h3>
+      <ul class="nav nav-pills ms-3">
+        <li class="nav-item"><a class="nav-link" href="{{ base }}">Requests</a></li>
+        <li class="nav-item"><a class="nav-link active" href="{{ base }}/summary">Summary</a></li>
+      </ul>
+    </div>
+    <div class="card-body border-bottom text-secondary py-3">
+      Grouped by method and route pattern, heaviest total time first, so
+      <code>/users/1</code> and <code>/users/2</code> are one row. Percentiles
+      rather than the average, which one outlier ruins.
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead>
+          <tr>
+            <th>Method</th><th>Route</th>
+            <th class="text-end">Calls</th><th class="text-end">p50</th>
+            <th class="text-end">p95</th><th class="text-end">p99</th>
+            <th class="text-end">Total</th><th class="text-end">Avg queries</th>
+            <th class="text-end">Duplicates</th><th class="text-end">SQL errors</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td><span class="badge bg-blue-lt">{{ row.method }}</span></td>
+            <td><a href="{{ base }}?q={{ row.path }}">{{ row.path }}</a></td>
+            <td class="text-end">{{ row.count }}</td>
+            <td class="text-end fw-bold">{{ "%.1f"|format(row.p50_ms) }} ms</td>
+            <td class="text-end">{{ "%.1f"|format(row.p95_ms) }} ms</td>
+            <td class="text-end">{{ "%.1f"|format(row.p99_ms) }} ms</td>
+            <td class="text-end text-secondary">{{ "%.1f"|format(row.total_ms) }} ms</td>
+            <td class="text-end">{{ "%.1f"|format(row.avg_queries) }}</td>
+            <td class="text-end">
+              {% if row.total_duplicates %}
+              <span class="badge bg-orange-lt">{{ row.total_duplicates }}</span>
+              {% else %}0{% endif %}
+            </td>
+            <td class="text-end">
+              {% if row.total_errors %}
+              <span class="badge bg-red-lt">{{ row.total_errors }}</span>
+              {% else %}0{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-secondary py-4">Nothing recorded yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

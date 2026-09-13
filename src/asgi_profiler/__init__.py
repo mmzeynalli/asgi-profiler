@@ -32,6 +32,7 @@ from .models import (
     group_queries,
 )
 from .routing import route_pattern
+from .rules import profiler_exclude, profiler_include
 from .storage import (
     BaseStorage,
     Filters,
@@ -64,6 +65,8 @@ __all__ = [
     "group_queries",
     "install",
     "install_sql_hooks",
+    "profiler_exclude",
+    "profiler_include",
     "route_pattern",
     "summarise",
     "uninstall_sql_hooks",
@@ -117,6 +120,18 @@ class Profiler:
     def statements(self, limit: int = 100) -> list[StatementSummary]:
         return self.storage.statements(limit)
 
+    def exclude(self, *paths: str) -> None:
+        """Stop recording requests under `paths`, after `install()`.
+
+        For integrations that only learn what to exclude later -- mounting the
+        viewer inside an admin, say, where the admin's own URL is not known
+        until it is registered. Matched on segment boundaries like
+        `ProfilerConfig.exclude_paths`, which this appends to.
+        """
+        wanted = [p for p in paths if p and p not in self.config.exclude_paths]
+        if wanted:
+            self.config.exclude_paths = (*self.config.exclude_paths, *wanted)
+
     def clear(self) -> None:
         self.storage.clear()
 
@@ -137,7 +152,8 @@ def install(
 
     Args:
         app: a Starlette or FastAPI application. Call this before the app
-            starts serving -- middleware cannot be added afterwards.
+            starts serving -- middleware cannot be added afterwards. Pass
+            `mount_path=None` to record without mounting the viewer.
         config: a :class:`ProfilerConfig`. Keyword options are merged into a
             *copy*, so a shared config object is never rewritten under you.
         storage: a custom store; defaults to :class:`MemoryStorage`. Pass
@@ -176,11 +192,12 @@ def install(
         stack_depth=config.stack_depth,
     )
     app.add_middleware(ProfilerMiddleware, storage=storage, config=config)
-    app.mount(
-        config.mount_path,
-        build_viewer(storage, config, prefix=config.mount_path),
-        name="profiler",
-    )
+    if config.mount_path is not None:
+        app.mount(
+            config.mount_path,
+            build_viewer(storage, config, prefix=config.mount_path),
+            name="profiler",
+        )
     with contextlib.suppress(AttributeError):  # an app defining __slots__
         setattr(app, _MARKER, True)
 

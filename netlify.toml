@@ -1,0 +1,18 @@
+[build]
+command = "pip install uv && uv run --extra dev --locked zensical build --clean"
+publish = "site"
+
+[build.environment]
+PYTHON_VERSION = "3.12"
+
+[[headers]]
+for = "/*"
+
+[headers.values]
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+for = "/assets/*"
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"

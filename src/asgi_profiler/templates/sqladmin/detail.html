@@ -1,0 +1,99 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="mb-3">
+    <a href="{{ base }}" class="text-secondary">&larr; All requests</a>
+  </div>
+
+  <h2 class="mb-1">
+    <span class="badge bg-blue-lt align-middle">{{ profile.method }}</span>
+    <span class="align-middle">{{ profile.full_path }}</span>
+  </h2>
+  {% if profile.group and profile.group != profile.path %}
+  <div class="text-secondary mb-3">Route <code>{{ profile.group }}</code></div>
+  {% endif %}
+
+  <div class="row row-cards mb-3">
+    {% set tiles = [
+      ("Status", profile.status_code, ""),
+      ("Total", "%.1f ms"|format(profile.duration_ms), ""),
+      ("In SQL", "%.1f ms"|format(profile.query_ms), ""),
+      ("In Python", "%.1f ms"|format(profile.python_ms), ""),
+      ("Queries", profile.query_count, ""),
+      ("Duplicates", profile.duplicate_count, "border-orange" if profile.duplicate_count else ""),
+    ] %}
+    {% for label, value, extra in tiles %}
+    <div class="col-6 col-md-2">
+      <div class="card {{ extra }}">
+        <div class="card-body text-center p-3">
+          <div class="h2 m-0">{{ value }}</div>
+          <div class="text-secondary small">{{ label }}</div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if profile.duplicate_count %}
+  <div class="alert alert-warning">
+    {{ profile.duplicate_count }} statement(s) repeat SQL already run in this
+    request. That is the signature of an N+1 &mdash; the stack on the repeated
+    statement below names the line that issued it.
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Queries</h3>
+      <span class="text-secondary ms-2">
+        {{ groups|length }} distinct statement{{ '' if groups|length == 1 else 's' }},
+        {{ profile.query_count }} execution{{ '' if profile.query_count == 1 else 's' }}
+      </span>
+    </div>
+    <div class="list-group list-group-flush">
+      {% for g in groups %}
+      <div class="list-group-item {% if g.is_duplicate %}bg-orange-lt{% elif g.failed %}bg-red-lt{% endif %}">
+        <div class="d-flex align-items-center mb-2">
+          <span class="badge bg-blue-lt">{{ g.operation }}</span>
+          {% if g.is_duplicate %}
+          <span class="badge bg-orange ms-2">&times;{{ g.count }}</span>
+          {% endif %}
+          {% if g.failed %}<span class="badge bg-red ms-2">failed</span>{% endif %}
+          <span class="ms-auto text-secondary">
+            {{ "%.2f"|format(g.total_ms) }} ms total
+            {%- if g.count > 1 %} &middot; {{ "%.2f"|format(g.total_ms / g.count) }} ms avg{% endif %}
+          </span>
+        </div>
+        <pre class="mb-2 p-2 bg-dark-lt rounded"><code>{{ g.sql }}</code></pre>
+        {# `error` is the message; `first_failure` is the Query that carried it. #}
+        {% if g.error %}
+        <div class="text-danger small mb-2">{{ g.error }}</div>
+        {% endif %}
+        {% if g.stack %}
+        <details>
+          <summary class="text-secondary small">
+            Stack ({{ g.stack|length }} frames)
+            {%- if g.failed %} &mdash; the failing call
+            {%- elif g.is_duplicate %} &mdash; where the first of {{ g.count }} was issued{% endif %}
+          </summary>
+          <pre class="mt-2 mb-0 p-2 bg-dark-lt rounded small"><code>{% for frame in g.stack %}{{ frame }}
+{% endfor %}</code></pre>
+        </details>
+        {% endif %}
+        {# `call_sites` counts *distinct* stacks, not frames: more than one
+           means the same SQL is issued from several places, so the stack above
+           only explains some of the executions. #}
+        {% if g.call_sites > 1 %}
+        <div class="text-secondary small mt-2">
+          Issued from {{ g.call_sites }} different call sites &mdash; the stack
+          above is only the first.
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="list-group-item text-secondary">This request ran no SQL.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
