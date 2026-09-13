@@ -41,7 +41,6 @@ Choosing what gets profiled, and somewhere else to look at it.
 
 ### Known limitations
 
-- Python-side profiling is still not here; see the roadmap.
 - `@profiler_include` cannot be honoured before routing, because Starlette
   only sets `scope["endpoint"]` during it. The middleware therefore stops
   skipping excluded requests early as soon as one exists anywhere in the
