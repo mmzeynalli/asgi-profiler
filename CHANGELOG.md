@@ -6,7 +6,48 @@ All notable changes to `asgi-profiler` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/) and this project
 follows [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - 11.09.2026
+## [0.2.0] - 2026-09-13
+
+Choosing what gets profiled, and somewhere else to look at it.
+
+### Added
+
+- `include_regex` and `exclude_regex` — record only, or never, the paths they
+  match. Matched with `search`, so `"/health"` also catches `/health/db`;
+  anchor with `^`/`$` for the strict reading.
+- `@profiler_include` and `@profiler_exclude` — per-endpoint overrides,
+  decisive in both directions and outranking every pattern. Work above or
+  below the route decorator. An excluded request is skipped before routing,
+  so a health check costs nothing.
+- `Profiler.exclude(*paths)` — add exclusions after `install()`, for
+  integrations that only learn what to exclude later.
+- `mount_path=None` — record without mounting the viewer, for when the pages
+  are served somewhere else.
+- **SQLAdmin integration** (`asgi-profiler[sqladmin]`). `register(admin,
+  profiler)` adds the profiler as a view inside an existing admin, rendered in
+  SQLAdmin's own layout. Every route goes through SQLAdmin's authentication,
+  which is the first authentication the viewer has ever had. The admin's own
+  requests are excluded by default (`profile_admin=True` to keep them), or
+  opening the profiler would record the profiler.
+- A **Clear** button on the SQLAdmin view, behind a confirmation dialog and
+  `POST`-only so a prefetch cannot wipe the history.
+- A documentation site: <https://asgi-profiler.netlify.app/>
+
+### Fixed
+
+- `mount_path=""` excluded every path in the application, so the profiler
+  recorded nothing and looked broken rather than misconfigured. It now raises
+  and names `mount_path=None` as the thing that was probably meant.
+
+### Known limitations
+
+- Python-side profiling is still not here; see the roadmap.
+- `@profiler_include` cannot be honoured before routing, because Starlette
+  only sets `scope["endpoint"]` during it. The middleware therefore stops
+  skipping excluded requests early as soon as one exists anywhere in the
+  process. This changes when the decision is made, never what is recorded.
+
+## [0.1.0] - 2026-09-11
 
 First release. Request and SQL profiling for **ASGI** applications —
 **Starlette**, **FastAPI** — with **SQLAlchemy** and **SQLModel**.
