@@ -18,6 +18,7 @@ nav = [
   ] },
   { "Guide" = [
     "guide/what-it-shows.md",
+    "guide/detectors.md",
     "guide/filtering.md",
     "guide/configuration.md",
     "guide/storage.md",

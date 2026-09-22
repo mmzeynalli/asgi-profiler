@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import uuid
 from typing import Any
@@ -11,7 +12,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import rules
 from .config import ProfilerConfig
-from .instrument import current_queries
+from .detectors import detect
+from .instrument import current_origin, current_queries
 from .models import Profile, Query
 from .routing import request_path, route_path, route_pattern
 from .storage import Storage
@@ -76,6 +78,11 @@ class ProfilerMiddleware:
         queries: list[Query] = []
         token = current_queries.set(queries)
         started = time.perf_counter()
+        # Both halves of what a statement needs to place itself: when the
+        # request began, and which thread the event loop is on. This runs on
+        # the loop thread by definition -- an ASGI app is only ever called
+        # from it -- so `get_ident()` here *is* the loop's thread.
+        origin_token = current_origin.set((started, threading.get_ident()))
 
         async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -110,7 +117,13 @@ class ProfilerMiddleware:
             profile.queries = list(queries)
             profile.route = route_pattern(scope, original_root)
             profile.finalise()
+            # After the response has gone out, so the cost of concluding
+            # things about a request is never paid by the person waiting for
+            # it. `detect` swallows its own errors for the same reason
+            # `_store` does.
+            profile.problems = detect(profile, self.config.detector_settings())
             current_queries.reset(token)
+            current_origin.reset(origin_token)
             # Guard rather than an early `return`: a bare return inside
             # `finally` swallows whatever exception is in flight, so a handler
             # that raised would have been reported as a clean response.

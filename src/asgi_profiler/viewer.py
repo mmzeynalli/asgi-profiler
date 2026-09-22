@@ -33,6 +33,7 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from .config import ProfilerConfig
+from .detectors import LABELS, SEVERITY
 from .storage import Filters, Storage
 
 HERE = Path(__file__).parent
@@ -148,6 +149,8 @@ def build_viewer(storage: Storage, config: ProfilerConfig, prefix: str = "") -> 
             "config": config,
             "storage_size": await read(storage.count),
             "urls": _Urls(request, prefix),
+            "problem_labels": LABELS,
+            "problem_severity": SEVERITY,
             **extra,
         }
 

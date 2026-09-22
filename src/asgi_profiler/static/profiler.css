@@ -270,3 +270,32 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-
 .stmt pre.sql { margin-top: 6px; font-size: 11px; max-height: 120px; overflow: auto; }
 .alarm-text { color: var(--warn); font-weight: 650; }
 h2 .small { font-weight: 400; margin-left: 6px; }
+
+/* ---------------------------------------------------------------- findings
+   The detectors' output, above the statement list. Deliberately the first
+   thing on the page: the statements are evidence, and the reader should not
+   have to assemble the conclusion from them when one is already available. */
+.findings { margin: 0 0 22px; }
+.findings h2 { margin-bottom: 10px; }
+.findings ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.finding {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--dup-bg);
+}
+.finding.err { border-left-color: var(--err); }
+.fhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fhead strong { font-size: 14px; }
+.fdetail { margin: 8px 0 0; font-size: 13px; line-height: 1.5; }
+.fevidence { margin-top: 8px; }
+.fevidence .label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 3px;
+}
+.fevidence pre { margin: 0; max-height: 140px; overflow: auto; }

@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-from .models import PathSummary, Profile, Query, StatementSummary
+from .models import PathSummary, Problem, Profile, Query, StatementSummary
 
 logger = logging.getLogger("asgi_profiler")
 
@@ -62,6 +62,7 @@ class Filters:
     min_ms: float | None = None
     only_duplicates: bool = False
     only_errors: bool = False
+    only_problems: bool = False
     order: str = "recent"
 
     @classmethod
@@ -88,6 +89,7 @@ class Filters:
             min_ms=min_ms,
             only_duplicates=only == "duplicates",
             only_errors=only == "errors",
+            only_problems=only == "problems",
             order=order if order in _ORDERINGS else "recent",
         )
 
@@ -101,6 +103,7 @@ class Filters:
             or self.min_ms is not None
             or self.only_duplicates
             or self.only_errors
+            or self.only_problems
         )
 
     def matches(self, profile: Profile) -> bool:
@@ -115,6 +118,8 @@ class Filters:
         if self.status == "warn" and not (400 <= profile.status_code < 500):
             return False
         if self.status == "ok" and not (200 <= profile.status_code < 300):
+            return False
+        if self.only_problems and not profile.problems:
             return False
         if self.only_duplicates and not profile.duplicate_count:
             return False
@@ -284,7 +289,7 @@ class IncompatibleCapture(RuntimeError):
 #: Bumped whenever the table layout changes. A mismatch rebuilds the file
 #: rather than failing with an opaque OperationalError from inside `add()`,
 #: after the response has already gone out.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS profiles (
@@ -302,8 +307,16 @@ CREATE TABLE IF NOT EXISTS profiles (
     query_count     INTEGER NOT NULL DEFAULT 0,
     duplicate_count INTEGER NOT NULL DEFAULT 0,
     error_count     INTEGER NOT NULL DEFAULT 0,
+    blocking_count  INTEGER NOT NULL DEFAULT 0,
+    problem_count   INTEGER NOT NULL DEFAULT 0,
     recorded_at     TEXT NOT NULL,
     client          TEXT NOT NULL DEFAULT '',
+    -- Its own column rather than part of `payload`, because the request list
+    -- reads it on every row and deliberately does not load the payload: the
+    -- statements are most of a profile's bytes and the listing shows none of
+    -- them. Problems are a handful of small objects, so they can be afforded
+    -- on a page of fifty rows and the badges come for free.
+    problems        TEXT NOT NULL DEFAULT '[]',
     payload         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS profiles_seq ON profiles (seq DESC);
@@ -312,13 +325,17 @@ CREATE INDEX IF NOT EXISTS profiles_group ON profiles (method, grp);
 CREATE TABLE IF NOT EXISTS statements (
     profile_seq  INTEGER NOT NULL,
     sql          TEXT NOT NULL,
+    sql_hash     TEXT NOT NULL DEFAULT '',
     grp          TEXT NOT NULL DEFAULT '',
     method       TEXT NOT NULL DEFAULT 'GET',
     duration_ms  REAL NOT NULL DEFAULT 0,
     failed       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS statements_profile ON statements (profile_seq);
-CREATE INDEX IF NOT EXISTS statements_sql ON statements (sql);
+-- On the hash, not the text. The text is what gets displayed; the hash is
+-- what gets grouped, and grouping a 4000-character statement by its text is
+-- an index entry the size of the statement.
+CREATE INDEX IF NOT EXISTS statements_hash ON statements (sql_hash);
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
@@ -330,8 +347,9 @@ INSERT OR IGNORE INTO meta (key, value) VALUES ('rows', 0);
 _INSERT = (
     "INSERT OR REPLACE INTO profiles (id, method, path, route, grp,"
     " query_string, search_path, status_code, duration_ms, query_ms,"
-    " query_count, duplicate_count, error_count, recorded_at, client, payload)"
-    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    " query_count, duplicate_count, error_count, blocking_count,"
+    " problem_count, recorded_at, client, problems, payload)"
+    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
 )
 
 
@@ -582,12 +600,13 @@ class SQLiteStorage(BaseStorage):
         }
         self._conn.executemany(
             "INSERT INTO statements"
-            " (profile_seq, sql, grp, method, duration_ms, failed)"
-            " VALUES (?,?,?,?,?,?)",
+            " (profile_seq, sql, sql_hash, grp, method, duration_ms, failed)"
+            " VALUES (?,?,?,?,?,?,?)",
             [
                 (
                     seqs[p.id],
                     q.sql,
+                    q.sql_hash,
                     p.group,
                     p.method,
                     q.duration_ms,
@@ -740,7 +759,7 @@ class SQLiteStorage(BaseStorage):
         with self._lock:
             rows = self._conn.execute(
                 "SELECT method, grp, duration_ms, query_count, duplicate_count,"
-                " error_count FROM profiles"
+                " error_count, problem_count FROM profiles"
             ).fetchall()
         # Aggregated in Python rather than SQL because percentiles need the
         # whole distribution and SQLite has no PERCENTILE_CONT. One narrow
@@ -759,6 +778,7 @@ class SQLiteStorage(BaseStorage):
             summary.total_queries += int(row["query_count"])
             summary.total_duplicates += int(row["duplicate_count"])
             summary.total_errors += int(row["error_count"])
+            summary.total_problems += int(row["problem_count"])
             durations[key].append(duration)
         for key, summary in buckets.items():
             summary.set_percentiles(durations[key])
@@ -768,12 +788,13 @@ class SQLiteStorage(BaseStorage):
         self.flush()
         with self._lock:
             rows = self._conn.execute(
-                "SELECT sql, COUNT(*) AS n, SUM(duration_ms) AS total,"
+                "SELECT MIN(sql) AS sql, sql_hash, COUNT(*) AS n,"
+                " SUM(duration_ms) AS total,"
                 " MAX(duration_ms) AS worst, SUM(failed) AS failures,"
                 " COUNT(DISTINCT profile_seq) AS requests,"
                 " COUNT(DISTINCT grp) AS routes,"
                 " MIN(grp) AS a_route, MIN(method) AS a_method"
-                " FROM statements GROUP BY sql"
+                " FROM statements GROUP BY sql_hash"
                 # `sql` as a tiebreaker so that a LIMIT returns the same rows
                 # here as in MemoryStorage. Equal totals are common with
                 # coarse timers, and a limit that depends on the backend is
@@ -784,6 +805,7 @@ class SQLiteStorage(BaseStorage):
         return [
             StatementSummary(
                 sql=r["sql"],
+                sql_hash=r["sql_hash"],
                 count=int(r["n"]),
                 total_ms=float(r["total"] or 0.0),
                 max_ms=float(r["worst"] or 0.0),
@@ -815,6 +837,8 @@ def _row_values(profile: Profile) -> tuple[Any, ...]:
                     "sql": q.sql,
                     "params": q.params,
                     "duration_ms": q.duration_ms,
+                    "started_ms": q.started_ms,
+                    "blocking": q.blocking,
                     "stack": q.stack,
                     "is_duplicate": q.is_duplicate,
                     "error": q.error,
@@ -837,8 +861,11 @@ def _row_values(profile: Profile) -> tuple[Any, ...]:
         profile.query_count,
         profile.duplicate_count,
         profile.error_count,
+        profile.blocking_count,
+        len(profile.problems),
         profile.recorded_at.isoformat(),
         profile.client,
+        json.dumps([problem.as_dict() for problem in profile.problems]),
         payload,
     )
 
@@ -866,6 +893,8 @@ def _where(filters: Filters) -> tuple[str, tuple[Any, ...]]:
         clauses.append("status_code >= 400 AND status_code < 500")
     elif filters.status == "ok":
         clauses.append("status_code >= 200 AND status_code < 300")
+    if filters.only_problems:
+        clauses.append("problem_count > 0")
     if filters.only_duplicates:
         clauses.append("duplicate_count > 0")
     if filters.only_errors:
@@ -895,12 +924,17 @@ def _row_to_profile(row: sqlite3.Row, *, with_queries: bool) -> Profile:
                 sql=q["sql"],
                 params=q["params"],
                 duration_ms=q["duration_ms"],
+                started_ms=q.get("started_ms", 0.0),
+                blocking=q.get("blocking", False),
                 stack=q.get("stack", []),
                 is_duplicate=q.get("is_duplicate", False),
                 error=q.get("error"),
             )
             for q in payload.get("queries", [])
         ],
+        # Read whether or not the statements were: this is what puts a badge
+        # on a listing row, and the listing never loads the payload.
+        problems=[Problem.from_dict(d) for d in json.loads(row["problems"] or "[]")],
     )
     # Read the counters back rather than recomputing them, so a listing row
     # stays correct even though its statements were not loaded.
@@ -908,6 +942,7 @@ def _row_to_profile(row: sqlite3.Row, *, with_queries: bool) -> Profile:
     profile.query_ms = float(row["query_ms"])
     profile.duplicate_count = int(row["duplicate_count"])
     profile.error_count = int(row["error_count"])
+    profile.blocking_count = int(row["blocking_count"])
     return profile
 
 
@@ -940,6 +975,7 @@ def summarise(profiles: Iterable[Profile]) -> PathSummaries:
         row.total_queries += profile.query_count
         row.total_duplicates += profile.duplicate_count
         row.total_errors += profile.error_count
+        row.total_problems += len(profile.problems)
         durations[key].append(profile.duration_ms)
     for key, row in rows.items():
         row.set_percentiles(durations[key])
@@ -960,23 +996,27 @@ def aggregate_statements(profiles: Iterable[Profile], limit: int = 100) -> State
     requests: dict[str, set[str]] = defaultdict(set)
     for profile in profiles:
         for query in profile.queries:
-            row = rows.get(query.sql)
+            key = query.sql_hash
+            row = rows.get(key)
             if row is None:
-                row = rows[query.sql] = StatementSummary(sql=query.sql)
+                row = rows[key] = StatementSummary(sql=query.sql, sql_hash=key)
             row.count += 1
             row.total_ms += query.duration_ms
             row.max_ms = max(row.max_ms, query.duration_ms)
+            # `min` throughout, never "the first one seen": SQLite groups with
+            # MIN(), and a sample that depends on insertion order is not the
+            # same API. The displayed text is one real execution of the group,
+            # chosen the same way in both backends.
+            row.sql = min(row.sql, query.sql)
             if query.failed:
                 row.failures += 1
-            routes[query.sql].add(profile.group)
-            methods[query.sql].add(profile.method)
-            requests[query.sql].add(profile.id)
-    for sql, row in rows.items():
-        row.route_count = len(routes[sql])
-        row.requests = len(requests[sql])
-        # `min` rather than "the first one seen": SQLite groups with MIN(), and
-        # a sample that depends on insertion order is not the same API.
-        row.sample_route = min(routes[sql]) if routes[sql] else ""
-        row.sample_method = min(methods[sql]) if methods[sql] else "GET"
+            routes[key].add(profile.group)
+            methods[key].add(profile.method)
+            requests[key].add(profile.id)
+    for key, row in rows.items():
+        row.route_count = len(routes[key])
+        row.requests = len(requests[key])
+        row.sample_route = min(routes[key]) if routes[key] else ""
+        row.sample_method = min(methods[key]) if methods[key] else "GET"
     ordered = sorted(rows.values(), key=lambda r: (-r.total_ms, r.sql))
     return ordered[: max(0, limit)]

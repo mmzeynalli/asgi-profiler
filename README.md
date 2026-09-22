@@ -96,15 +96,25 @@ which line made it slow.
 
 - **One line to install.** `install(app)` adds the middleware and mounts the
   viewer. You never hand the profiler an engine.
+- **Findings, not just numbers.** Every request is run through detectors that
+  say what is *wrong* with it: an **N+1** that names the line which issued it
+  and the query that ran before the loop; a **blocking database call** — a
+  synchronous driver call made on the event loop, which freezes every other
+  request in flight and which nothing else reports; and a **slow query**. Each
+  one carries a stable fingerprint, so CI can assert that no *new* problem
+  appeared.
 - **N+1 detection that names the line.** Repeated statements collapse into a
   single row with a `×N` badge and the stack that issued them — a 500-row N+1
   is one line to read, not 500 to scroll.
+- **Statements grouped by meaning, not by text.** `IN (1, 2)` and
+  `IN (1, 2, 3)` are one statement; identifiers and quoted names are left
+  alone.
 - **Grouped by route, not by path.** `/users/1` and `/users/2` aggregate as
   `/users/{user_id}`, with p50/p95/p99 rather than an average.
 - **Cross-request statement view.** Which SQL costs you application-wide, not
   just on the endpoint you happen to be looking at.
 - **JSON for every page**, so a test can fail a build when an endpoint
-  regresses.
+  regresses — or when a detector finds something new.
 - **Works with async engines**, sync engines, several engines at once, and
   SQLModel — with no configuration for any of them.
 - **Filter what you profile.** `include_regex` / `exclude_regex`, plus

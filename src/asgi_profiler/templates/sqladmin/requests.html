@@ -83,10 +83,16 @@
             <td><span class="badge bg-blue-lt">{{ profile.method }}</span></td>
             <td>
               <a href="{{ base }}/request/{{ profile.id }}">{{ profile.full_path }}</a>
-              {% if profile.duplicate_count %}
-              <span class="badge bg-orange-lt ms-1"
-                    title="{{ profile.duplicate_count }} repeated statements">
-                N+1 &times;{{ profile.duplicate_count }}</span>
+              {% if profile.problems %}
+                {% for type in profile.problems|map(attribute='type')|unique %}
+                <span class="badge bg-{{ problem_severity.get(type, 'orange') }}-lt ms-1"
+                      title="{{ (profile.problems|selectattr('type', 'equalto', type)|first).title }}">
+                  {{ problem_labels.get(type, type) }}</span>
+                {% endfor %}
+              {% elif profile.duplicate_count %}
+              <span class="badge bg-azure-lt ms-1"
+                    title="{{ profile.duplicate_count }} repeated statements, below the N+1 thresholds">
+                repeats &times;{{ profile.duplicate_count }}</span>
               {% endif %}
               {% if profile.error_count %}
               <span class="badge bg-red-lt ms-1">{{ profile.error_count }} SQL error(s)</span>

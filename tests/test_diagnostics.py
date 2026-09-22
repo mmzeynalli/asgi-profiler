@@ -208,11 +208,16 @@ def test_aggregate_statements_spans_routes():
 def test_aggregate_statements_respects_the_limit():
     profile = make(
         1,
-        queries=[Query(sql=f"SELECT {i}", params="()", duration_ms=float(i)) for i in range(20)],
+        # Distinct *tables*, not distinct literals: a bare `SELECT 7` and a
+        # bare `SELECT 9` are one statement with a different value in it as
+        # far as `sql_hash` is concerned, which is the point of it.
+        queries=[
+            Query(sql=f"SELECT * FROM t{i}", params="()", duration_ms=float(i)) for i in range(20)
+        ],
     )
     rows = aggregate_statements([profile], limit=5)
     assert len(rows) == 5
-    assert rows[0].sql == "SELECT 19"  # the most expensive
+    assert rows[0].sql == "SELECT * FROM t19"  # the most expensive
 
 
 @pytest.mark.parametrize("backend", ["memory", "sqlite"])
@@ -260,10 +265,10 @@ def test_statements_survive_a_trim(tmp_path):
     """Evicted profiles must not leave their statements behind."""
     with SQLiteStorage(tmp_path / "trim.db", max_requests=3, background=False) as store:
         for i in range(10):
-            store.add(make(i, route=f"/r{i}", queries=[Query(f"SELECT {i}", "()", 1.0)]))
+            store.add(make(i, route=f"/r{i}", queries=[Query(f"SELECT * FROM t{i}", "()", 1.0)]))
         assert store.count() == 3
         sqls = {r.sql for r in store.statements()}
-        assert sqls == {"SELECT 7", "SELECT 8", "SELECT 9"}
+        assert sqls == {"SELECT * FROM t7", "SELECT * FROM t8", "SELECT * FROM t9"}
 
 
 # -------------------------------------------------------------- percentiles

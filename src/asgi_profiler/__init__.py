@@ -20,11 +20,16 @@ from importlib.metadata import version as _installed_version
 from typing import Any
 
 from .config import ProfilerConfig
+from .detectors import TYPES as DETECTOR_TYPES
+from .detectors import Settings as DetectorSettings
+from .detectors import detect
+from .fingerprint import normalise_sql, sql_hash
 from .instrument import install as install_sql_hooks
 from .instrument import uninstall as uninstall_sql_hooks
 from .middleware import ProfilerMiddleware
 from .models import (
     PathSummary,
+    Problem,
     Profile,
     Query,
     QueryGroup,
@@ -47,10 +52,13 @@ from .viewer import build_viewer
 
 __all__ = [
     "BaseStorage",
+    "DETECTOR_TYPES",
+    "DetectorSettings",
     "Filters",
     "MemoryStorage",
     "Page",
     "PathSummary",
+    "Problem",
     "Profile",
     "Profiler",
     "ProfilerConfig",
@@ -62,12 +70,15 @@ __all__ = [
     "Storage",
     "aggregate_statements",
     "build_viewer",
+    "detect",
     "group_queries",
     "install",
     "install_sql_hooks",
+    "normalise_sql",
     "profiler_exclude",
     "profiler_include",
     "route_pattern",
+    "sql_hash",
     "summarise",
     "uninstall_sql_hooks",
 ]

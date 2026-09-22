@@ -21,6 +21,7 @@
       ("In Python", "%.1f ms"|format(profile.python_ms), ""),
       ("Queries", profile.query_count, ""),
       ("Duplicates", profile.duplicate_count, "border-orange" if profile.duplicate_count else ""),
+      ("Blocking", profile.blocking_count, "border-red" if profile.blocking_count else ""),
     ] %}
     {% for label, value, extra in tiles %}
     <div class="col-6 col-md-2">
@@ -34,11 +35,43 @@
     {% endfor %}
   </div>
 
-  {% if profile.duplicate_count %}
+  {% if profile.problems %}
+  <div class="card mb-3">
+    <div class="card-header">
+      <h3 class="card-title">Findings</h3>
+      <span class="card-subtitle text-secondary">most expensive first</span>
+    </div>
+    <div class="list-group list-group-flush">
+      {% for problem in profile.problems %}
+      <div class="list-group-item">
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+          <span class="badge bg-{{ problem_severity.get(problem.type, 'orange') }}-lt">
+            {{ problem_labels.get(problem.type, problem.type) }}</span>
+          <strong>{{ problem.title }}</strong>
+          <span class="text-secondary small">{{ "%.1f"|format(problem.time_ms) }} ms</span>
+        </div>
+        <div class="small">{{ problem.detail }}</div>
+        {% if problem.evidence.get('frame') %}
+        <div class="text-secondary small mt-2">Issued from</div>
+        <pre class="mb-0 small">{{ problem.evidence['frame'] }}</pre>
+        {% endif %}
+        {% if problem.evidence.get('source_sql') %}
+        <div class="text-secondary small mt-2">Preceded by</div>
+        <pre class="mb-0 small">{{ problem.evidence['source_sql'] }}</pre>
+        {% endif %}
+        {% if problem.evidence.get('sql') %}
+        <div class="text-secondary small mt-2">Statement</div>
+        <pre class="mb-0 small">{{ problem.evidence['sql'] }}</pre>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% elif profile.duplicate_count %}
   <div class="alert alert-warning">
     {{ profile.duplicate_count }} statement(s) repeat SQL already run in this
-    request. That is the signature of an N+1 &mdash; the stack on the repeated
-    statement below names the line that issued it.
+    request, but not enough of them, or for long enough, to be reported as an
+    N+1. The stack on the repeated statement below names the line that issued it.
   </div>
   {% endif %}
 

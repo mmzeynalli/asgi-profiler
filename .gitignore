@@ -13,6 +13,7 @@ profiler.db
 *.db-wal
 *.db-shm
 .coverage
+.coverage.*
 htmlcov/
 _to_delete/
 REVIEW.md

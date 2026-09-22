@@ -40,6 +40,17 @@ install(app, config=config)
 | `page_size` | `50` | Rows per page in the viewer. |
 | `statement_limit` | `100` | Rows on the statements page. |
 | `authorize` | `None` | Called for every viewer request. See [Security](security.md). |
+| `detectors` | `None` | Which detectors to run, by name. `None` is all of them, `()` is none. See [Findings](detectors.md). |
+| `n_plus_one_count` | `5` | How many identical statements make an N+1. |
+| `n_plus_one_ms` | `0.0` | Non-overlapping time they must occupy. Zero on purpose — see [Findings](detectors.md#why-two-thresholds-default-to-zero). |
+| `slow_query_issue_ms` | `100.0` | A statement at or over this is reported as a problem. |
+| `blocking_query_ms` | `0.0` | Loop-blocking time before a request is reported. Zero on purpose. |
+
+!!! note "`slow_query_ms` and `slow_query_issue_ms` are different options"
+
+    `slow_query_ms` colours a row in the viewer. `slow_query_issue_ms`
+    decides whether something is reported as a finding. Cosmetics and
+    conclusions are deliberately separate settings.
 
 ## Exclusions match on segment boundaries
 

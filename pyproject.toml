@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "asgi-profiler"
-version = "0.2.0"
+version = "0.3.0"
 description = "Request and SQL profiling for ASGI apps: Starlette, FastAPI, SQLAlchemy"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,8 @@ keywords = [
   "profiler",
   "profiling",
   "n+1",
+  "n-plus-one",
+  "asyncio",
   "sql",
   "silk",
 ]

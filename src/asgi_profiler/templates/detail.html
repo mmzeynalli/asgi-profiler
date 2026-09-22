@@ -45,13 +45,61 @@
     <div class="label">SQL errors</div>
   </div>
   {% endif %}
+  {% if profile.blocking_count %}
+  <div class="tile alarm">
+    <div class="value">{{ profile.blocking_count }}</div>
+    <div class="label">Blocking</div>
+  </div>
+  {% endif %}
 </section>
 
-{% if profile.duplicate_count %}
+{% if profile.problems %}
+<section class="findings">
+  <h2>
+    Findings
+    <span class="muted small">
+      {{ profile.problems|length }} thing{{ '' if profile.problems|length == 1 else 's' }}
+      worth changing, most expensive first
+    </span>
+  </h2>
+  <ol>
+    {% for problem in profile.problems %}
+    <li class="finding {{ problem_severity.get(problem.type, 'warn') }}">
+      <div class="fhead">
+        <span class="pill {{ problem_severity.get(problem.type, 'warn') }}">
+          {{ problem_labels.get(problem.type, problem.type) }}
+        </span>
+        <strong>{{ problem.title }}</strong>
+        <span class="muted small">{{ "%.1f"|format(problem.time_ms) }} ms</span>
+      </div>
+      <p class="fdetail">{{ problem.detail }}</p>
+      {% if problem.evidence.get('frame') %}
+      <div class="fevidence">
+        <span class="label">Issued from</span>
+        <pre class="stack">{{ problem.evidence['frame'] }}</pre>
+      </div>
+      {% endif %}
+      {% if problem.evidence.get('source_sql') %}
+      <div class="fevidence">
+        <span class="label">Preceded by</span>
+        <pre class="sql">{{ problem.evidence['source_sql'] }}</pre>
+      </div>
+      {% endif %}
+      {% if problem.evidence.get('sql') %}
+      <div class="fevidence">
+        <span class="label">{{ 'Repeated statement' if problem.type == 'n_plus_one_db' else 'Statement' }}</span>
+        <pre class="sql">{{ problem.evidence['sql'] }}</pre>
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% elif profile.duplicate_count %}
 <p class="banner">
-  {{ profile.duplicate_count }} statement(s) repeat SQL already run in this request.
-  That is the signature of an N+1 &mdash; the stack on the repeated statement
-  below names the line that issued it.
+  {{ profile.duplicate_count }} statement(s) repeat SQL already run in this request,
+  but not enough of them, or for long enough, to be reported as an N+1. The stack
+  on the repeated statement below names the line that issued it.
 </p>
 {% endif %}
 

@@ -25,8 +25,17 @@ from typing import TYPE_CHECKING, Any
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 from starlette.responses import RedirectResponse
 
+from ..detectors import LABELS, SEVERITY
 from ..models import group_queries
 from ..storage import Filters
+
+#: The viewer's own severity names translated into Tabler's palette, which is
+#: what SQLAdmin's layout understands. Keyed by problem type, so the template
+#: asks the same question here as it does on the standalone pages.
+_TABLER = {
+    problem_type: {"err": "red", "warn": "orange", "info": "azure"}.get(name, "orange")
+    for problem_type, name in SEVERITY.items()
+}
 
 if TYPE_CHECKING:  # pragma: no cover
     from starlette.requests import Request
@@ -126,6 +135,8 @@ def register(
                 "view": type(self),
                 "base": base_url(request),
                 "config": config,
+                "problem_labels": LABELS,
+                "problem_severity": _TABLER,
             }
 
         @expose("/profiler", methods=["GET"], identity="profiler")

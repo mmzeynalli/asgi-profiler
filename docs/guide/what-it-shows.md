@@ -17,10 +17,11 @@ that `/orders/17094` was served by `/orders/{order_id}`.
 
 The page that earns the library its keep.
 
+- **Findings** first, when there are any: what the detectors concluded about
+  this request, most expensive first, each with the line that caused it. See
+  [Findings](detectors.md).
 - **Six tiles**: status, total time, time in SQL, time in Python, query count,
-  duplicate count.
-- **A banner** when statements repeated, because that is the signature of an
-  N+1.
+  duplicate count — plus SQL errors and blocking calls when there are any.
 - **Every statement**, grouped by SQL text. A group that ran more than once is
   highlighted and badged with its count.
 - **A stack per group**, naming the frames in *your* code that issued it —

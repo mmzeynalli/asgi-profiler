@@ -6,6 +6,9 @@ import math
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
+
+from .fingerprint import is_truncated, sql_hash
 
 #: Statements longer than this are stored truncated. An ORM bulk insert can
 #: produce a single statement tens of kilobytes long, and `max_requests`
@@ -22,6 +25,16 @@ class Query:
     params: str
     duration_ms: float
     stack: list[str] = field(default_factory=list)
+    #: Milliseconds from the start of the request to the start of this
+    #: statement. Two statements overlap when one starts before the other
+    #: ends, which is the whole basis of telling "six queries that ran one
+    #: after another" apart from "six queries that ran at once" -- the first
+    #: is worth 300 ms of someone's afternoon and the second is not.
+    started_ms: float = 0.0
+    #: The statement ran on the event loop thread, outside SQLAlchemy's async
+    #: bridge: a synchronous driver call that stopped the loop dead for its
+    #: whole duration. See :mod:`asgi_profiler.detectors.blocking`.
+    blocking: bool = False
     #: Set by :meth:`Profile.finalise` once the whole request is known.
     is_duplicate: bool = False
     #: The exception text, when the statement failed. `None` means it succeeded.
@@ -32,9 +45,76 @@ class Query:
         return self.error is not None
 
     @property
+    def ended_ms(self) -> float:
+        return self.started_ms + self.duration_ms
+
+    @property
+    def sql_hash(self) -> str:
+        """Identity of the statement, ignoring per-execution values."""
+        return sql_hash(self.sql)
+
+    @property
+    def truncated(self) -> bool:
+        return is_truncated(self.sql)
+
+    @property
     def operation(self) -> str:
         head = self.sql.lstrip().split(" ", 1)[0].upper()
         return head if head.isalpha() else "SQL"
+
+
+@dataclass(slots=True)
+class Problem:
+    """Something the detectors concluded about a request.
+
+    The difference between a profiler and a report: `duplicate_count = 11` is
+    a number the reader has to interpret, and "11 identical queries issued
+    from repository.py:20, 57.6 ms -- load the relationship instead" is a
+    finding they can act on.
+
+    `fingerprint` is the identity of the *problem*, not of the request: the
+    same N+1 seen on four hundred requests has one fingerprint, which is what
+    lets the viewer collapse them into a single row and what lets CI say "this
+    is not new".
+    """
+
+    type: str
+    fingerprint: str
+    title: str
+    detail: str = ""
+    #: Named facts for the template: the source statement, the offending
+    #: frame, how many times it repeated. Display data, not API.
+    evidence: dict[str, Any] = field(default_factory=dict)
+    #: Indices into :attr:`Profile.queries`, so the detail page can highlight
+    #: the statements this is about without storing them twice.
+    offenders: list[int] = field(default_factory=list)
+    #: Time attributable to the problem. Not always time you would get back by
+    #: fixing it -- for consecutive queries that is a separate number -- but
+    #: always the size of the thing being pointed at.
+    time_ms: float = 0.0
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "fingerprint": self.fingerprint,
+            "title": self.title,
+            "detail": self.detail,
+            "evidence": self.evidence,
+            "offenders": self.offenders,
+            "time_ms": round(self.time_ms, 3),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Problem:
+        return cls(
+            type=str(data.get("type", "")),
+            fingerprint=str(data.get("fingerprint", "")),
+            title=str(data.get("title", "")),
+            detail=str(data.get("detail", "")),
+            evidence=dict(data.get("evidence") or {}),
+            offenders=list(data.get("offenders") or []),
+            time_ms=float(data.get("time_ms") or 0.0),
+        )
 
 
 @dataclass(slots=True)
@@ -45,9 +125,14 @@ class QueryGroup:
     repeated under each -- 447 kB of HTML that you have to scroll past to
     find the line that caused it. Collapsing is the difference between
     "I saw the N+1" and "I found it".
+
+    Grouped by :attr:`Query.sql_hash` rather than by literal text, so a page
+    of ten rows and a page of eleven -- identical queries with different `IN`
+    lists -- are one row here instead of two.
     """
 
     sql: str
+    sql_hash: str = ""
     count: int = 0
     total_ms: float = 0.0
     max_ms: float = 0.0
@@ -63,6 +148,8 @@ class QueryGroup:
     #: hint counts what was elided rather than what was executed.
     distinct_params: int = 0
     failures: int = 0
+    #: How many of the executions blocked the event loop.
+    blocking: int = 0
     #: Ordinal positions in the request, so the order of execution is legible.
     positions: list[int] = field(default_factory=list)
     #: Distinct stacks. More than one means the same SQL was issued from
@@ -113,14 +200,17 @@ def group_queries(queries: list[Query]) -> list[QueryGroup]:
     seen_params: dict[str, set[str]] = {}
     seen_stacks: dict[str, set[tuple[str, ...]]] = {}
     for position, query in enumerate(queries, start=1):
-        group = groups.get(query.sql)
+        key = query.sql_hash
+        group = groups.get(key)
         if group is None:
-            group = groups[query.sql] = QueryGroup(sql=query.sql, first=query)
-            seen_params[query.sql] = set()
-            seen_stacks[query.sql] = set()
+            group = groups[key] = QueryGroup(sql=query.sql, sql_hash=key, first=query)
+            seen_params[key] = set()
+            seen_stacks[key] = set()
         group.count += 1
         group.total_ms += query.duration_ms
         group.max_ms = max(group.max_ms, query.duration_ms)
+        if query.blocking:
+            group.blocking += 1
         if query.failed:
             group.failures += 1
             if group.first_failure is None:
@@ -128,14 +218,14 @@ def group_queries(queries: list[Query]) -> list[QueryGroup]:
         if len(group.positions) < _POSITION_SAMPLE:
             group.positions.append(position)
         if query.params not in _EMPTY_PARAMS:
-            distinct = seen_params[query.sql]
+            distinct = seen_params[key]
             if query.params not in distinct:
                 distinct.add(query.params)
                 group.distinct_params = len(distinct)
                 if len(group.params) < _PARAM_SAMPLE:
                     group.params.append(query.params)
         if query.stack:
-            stacks = seen_stacks[query.sql]
+            stacks = seen_stacks[key]
             stacks.add(tuple(query.stack))
             group.call_sites = len(stacks)
     return list(groups.values())
@@ -166,15 +256,21 @@ class Profile:
     response_headers: dict[str, str] = field(default_factory=dict)
     client: str = ""
     queries: list[Query] = field(default_factory=list)
+    #: What the detectors concluded. Filled by the middleware after
+    #: :meth:`finalise`, because a detector needs configured thresholds and a
+    #: dataclass should not reach for configuration.
+    problems: list[Problem] = field(default_factory=list)
 
     # -- derived, filled by finalise() ------------------------------------
     query_count: int = 0
     query_ms: float = 0.0
-    #: How many queries repeat SQL already seen in this request. The N+1
-    #: signal: a relationship loaded once per row produces the same statement
-    #: many times over.
+    #: How many queries repeat a statement already seen in this request. The
+    #: N+1 signal: a relationship loaded once per row produces the same
+    #: statement many times over.
     duplicate_count: int = 0
     error_count: int = 0
+    #: How many statements stopped the event loop.
+    blocking_count: int = 0
 
     def finalise(self) -> None:
         """Mark duplicated statements and compute the counters.
@@ -182,13 +278,14 @@ class Profile:
         Called once, when the request ends. Mutating `queries` afterwards
         leaves the counters stale.
         """
-        counts = Counter(q.sql for q in self.queries)
+        counts = Counter(q.sql_hash for q in self.queries)
         for query in self.queries:
-            query.is_duplicate = counts[query.sql] > 1
+            query.is_duplicate = counts[query.sql_hash] > 1
         self.query_count = len(self.queries)
         self.query_ms = sum(q.duration_ms for q in self.queries)
         self.duplicate_count = sum(n - 1 for n in counts.values() if n > 1)
         self.error_count = sum(1 for q in self.queries if q.failed)
+        self.blocking_count = sum(1 for q in self.queries if q.blocking)
 
     # -- presentation -----------------------------------------------------
     @property
@@ -223,7 +320,7 @@ class Profile:
 
         This is what makes the profiler scriptable: assert in CI that an
         endpoint stays under N queries, diff two runs, attach a trace to a
-        bug report.
+        bug report, fail a build when a detector finds something new.
         """
         data: dict[str, object] = {
             "id": self.id,
@@ -239,8 +336,10 @@ class Profile:
             "query_count": self.query_count,
             "duplicate_count": self.duplicate_count,
             "error_count": self.error_count,
+            "blocking_count": self.blocking_count,
             "recorded_at": self.recorded_at.isoformat(),
             "client": self.client,
+            "problems": [p.as_dict() for p in self.problems],
         }
         if with_queries:
             data["request_headers"] = self.request_headers
@@ -248,9 +347,12 @@ class Profile:
             data["queries"] = [
                 {
                     "sql": q.sql,
+                    "sql_hash": q.sql_hash,
                     "params": q.params,
                     "duration_ms": round(q.duration_ms, 3),
+                    "started_ms": round(q.started_ms, 3),
                     "is_duplicate": q.is_duplicate,
+                    "blocking": q.blocking,
                     "error": q.error,
                     "stack": q.stack,
                 }
@@ -279,6 +381,7 @@ class PathSummary:
     total_queries: int = 0
     total_duplicates: int = 0
     total_errors: int = 0
+    total_problems: int = 0
     #: Percentiles matter more than the average, which one outlier ruins and
     #: which tells you nothing about what most users experienced.
     p50_ms: float = 0.0
@@ -314,6 +417,7 @@ class PathSummary:
             "avg_queries": round(self.avg_queries, 3),
             "total_duplicates": self.total_duplicates,
             "total_errors": self.total_errors,
+            "total_problems": self.total_problems,
         }
 
 
@@ -322,6 +426,7 @@ class StatementSummary:
     """One SQL statement aggregated across every request that ran it."""
 
     sql: str
+    sql_hash: str = ""
     count: int = 0
     total_ms: float = 0.0
     max_ms: float = 0.0
@@ -350,6 +455,7 @@ class StatementSummary:
     def as_dict(self) -> dict[str, object]:
         return {
             "sql": self.sql,
+            "sql_hash": self.sql_hash,
             "count": self.count,
             "total_ms": round(self.total_ms, 3),
             "avg_ms": round(self.avg_ms, 3),

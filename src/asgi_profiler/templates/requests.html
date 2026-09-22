@@ -28,7 +28,8 @@
   </select>
   <select name="only">
     <option value="">Everything</option>
-    <option value="duplicates" {% if filters.get('only') == 'duplicates' %}selected{% endif %}>N+1 only</option>
+    <option value="problems"   {% if filters.get('only') == 'problems'   %}selected{% endif %}>With findings only</option>
+    <option value="duplicates" {% if filters.get('only') == 'duplicates' %}selected{% endif %}>Repeated SQL only</option>
     <option value="errors"     {% if filters.get('only') == 'errors'     %}selected{% endif %}>Failed SQL only</option>
   </select>
   {% if filters.get('route') %}
@@ -58,9 +59,19 @@
       <td class="path">
         <a href="{{ urls.detail(p.id) }}">{{ p.path }}</a>{% if p.query_string %}<span
           class="muted">?{{ p.query_string }}</span>{% endif %}
-        {% if p.duplicate_count %}
-        <span class="pill warn" title="{{ p.duplicate_count }} repeated statements — likely N+1">
-          N+1 &times;{{ p.duplicate_count }}
+        {% if p.problems %}
+          {% for type in p.problems|map(attribute='type')|unique %}
+          <span class="pill {{ problem_severity.get(type, 'warn') }}"
+                title="{{ (p.problems|selectattr('type', 'equalto', type)|first).title }}">
+            {{ problem_labels.get(type, type) }}
+          </span>
+          {% endfor %}
+        {% elif p.duplicate_count %}
+        {# Repeated statements that no detector was willing to call a problem:
+           worth a hint, not worth the word "N+1", which would make the badge
+           disagree with the finding list on the page it links to. #}
+        <span class="pill info" title="{{ p.duplicate_count }} repeated statements, below the N+1 thresholds">
+          repeats &times;{{ p.duplicate_count }}
         </span>
         {% endif %}
         {% if p.error_count %}

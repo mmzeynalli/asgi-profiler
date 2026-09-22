@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import threading
 import time
 import traceback
 from collections.abc import Iterator
@@ -34,6 +35,18 @@ except ImportError:  # pragma: no cover - sync-only install
 #: made there must land in an object the request task already holds.
 current_queries: contextvars.ContextVar[list[Query] | None] = contextvars.ContextVar(
     "asgi_profiler_queries", default=None
+)
+
+#: `(perf_counter at the start of the request, id of the event loop thread)`.
+#:
+#: The first turns an absolute timestamp into an offset from the start of the
+#: request, which is what makes two statements comparable: whether they
+#: overlapped, how long the gap between them was, whether six of them ran
+#: together or one after another.
+#:
+#: The second is how a blocking call is recognised. See `_blocks_the_loop`.
+current_origin: contextvars.ContextVar[tuple[float, int] | None] = contextvars.ContextVar(
+    "asgi_profiler_origin", default=None
 )
 
 _IGNORED_FRAME_PARTS = (
@@ -98,7 +111,7 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
         started = conn.info.get("_profiler_started")
         if not started:
             return
-        _record(statement, parameters, (time.perf_counter() - started.pop()) * 1000)
+        _record(statement, parameters, started.pop(), time.perf_counter())
 
     # ANN001 missing-type-function-argument: SQLAlchemy does not export
     # `ExceptionContext` as a public name to annotate this with.
@@ -118,7 +131,8 @@ def install(*, capture_stacks: bool = True, stack_depth: int = 8) -> None:
         _record(
             context.statement,
             context.parameters,
-            (time.perf_counter() - started.pop()) * 1000,
+            started.pop(),
+            time.perf_counter(),
             error=_format_error(context.original_exception),
         )
 
@@ -143,16 +157,58 @@ def uninstall() -> None:
     _installed = False
 
 
-def _record(statement: Any, parameters: Any, elapsed_ms: float, error: str | None = None) -> None:
+def _blocks_the_loop(loop_thread: int) -> bool:
+    """Did this statement run *on* the event loop, stopping it?
+
+    Three situations to tell apart, and only one of them is a bug:
+
+    * A different thread. Starlette runs `def` endpoints in a worker thread,
+      and `asyncio.to_thread` puts anything else there on request. The loop
+      keeps serving other requests throughout, so this is fine.
+    * The loop thread, inside a greenlet. SQLAlchemy's async bridge runs the
+      driver call in a greenlet it spawned and switches back to the loop while
+      it waits. Also fine, and the common case for `create_async_engine`.
+    * The loop thread, in the main greenlet. Nothing yielded: a synchronous
+      driver call inside an `async def` endpoint, holding the only thread the
+      server has for the entire duration of the query. Every other request
+      in flight is frozen behind it.
+
+    The greenlet test is on `parent` rather than on any SQLAlchemy internal,
+    because the bridge has been reorganised more than once and an attribute
+    name that moves would turn this into a silent false positive on every
+    async query. A spawned greenlet always has a parent; the main one never
+    does.
+
+    Under gevent everything runs in a greenlet, so this reports nothing. A
+    detector that misses a real problem is a disappointment; one that invents
+    them is the reason people turn detectors off.
+    """
+    if threading.get_ident() != loop_thread:
+        return False
+    if greenlet is not None and getattr(greenlet.getcurrent(), "parent", None) is not None:
+        return False
+    return True
+
+
+def _record(
+    statement: Any,
+    parameters: Any,
+    started: float,
+    ended: float,
+    error: str | None = None,
+) -> None:
     queries = current_queries.get()
     if queries is None:
         return  # outside any request: startup, migrations, a shell
 
+    origin = current_origin.get()
     queries.append(
         Query(
             sql=_normalise(statement),
             params=_format_params(parameters),
-            duration_ms=elapsed_ms,
+            duration_ms=(ended - started) * 1000,
+            started_ms=(started - origin[0]) * 1000 if origin else 0.0,
+            blocking=_blocks_the_loop(origin[1]) if origin else False,
             stack=(_capture_stack(_settings["stack_depth"]) if _settings["capture_stacks"] else []),
             error=error,
         )

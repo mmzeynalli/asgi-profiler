@@ -50,7 +50,7 @@ def _build(tmp_path, **register_kwargs):
     @app.get("/things/{thing_id}")
     def things(thing_id: int):
         with engine.connect() as conn:
-            for _ in range(3):  # a duplicate, so there is an N+1 to render
+            for _ in range(6):  # past n_plus_one_count, so a finding renders
                 conn.execute(text("SELECT COUNT(*) FROM widgets")).scalar()
         return {"id": thing_id}
 
@@ -96,7 +96,8 @@ def test_every_view_renders_inside_the_admin_layout(app_and_profiler):
         assert detail.status_code == 200
         assert "Test Admin" in detail.text
         assert "SELECT COUNT(*) FROM widgets" in detail.text
-        assert "signature of an N+1" in detail.text
+        assert "Findings" in detail.text
+        assert "N+1 query: 6 identical statements" in detail.text
 
         summary = client.get("/admin/profiler/summary")
         assert summary.status_code == 200

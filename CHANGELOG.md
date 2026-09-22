@@ -6,6 +6,83 @@ All notable changes to `asgi-profiler` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/) and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-22
+
+Findings, not just numbers. The profiler stops reporting metrics and starts
+reporting problems.
+
+### Added
+
+- **Detectors.** Every recorded request is now run through a set of detectors
+  after the response has gone out, and what they conclude appears as
+  **Findings** on the detail page, as a badge in the request list, and under
+  `problems` in the JSON. Three ship in this release:
+    - **N+1 query** — repeated identical statements that share an application
+      frame. Reports the line that issued them and the statement that ran
+      before the loop began. Repetition without a shared call site is not
+      reported: a serialiser and a permission check asking the same question
+      are not a loop.
+    - **Blocking database call** — a synchronous driver call made *on the
+      event loop*. A sync `Session` inside an `async def` endpoint freezes
+      every other request in flight, raises nothing, and shows up as latency
+      on endpoints that have nothing to do with it. Told apart from a `def`
+      endpoint (worker thread) and from an async engine (SQLAlchemy's greenlet
+      yields), both of which are fine and neither of which is reported.
+    - **Slow query** — one statement over `slow_query_issue_ms`, reported once
+      per distinct statement however often it ran.
+- **Stable fingerprints.** Every finding carries one — `1-n_plus_one_db-<hash>`
+  — identifying the *problem* rather than the request, so the same N+1 on four
+  hundred requests is one identity. CI can now assert that no new problem
+  appeared, not merely that a count stayed under a number.
+- **Query start times.** `Query.started_ms` is the offset from the start of
+  the request, so overlap, gaps and concurrency are all visible. Durations in
+  the detectors are interval unions rather than sums: twenty queries running
+  concurrently under `asyncio.gather` are not twenty queries' worth of waiting.
+- **`Query.blocking`**, a `Blocking` tile on the detail page, and
+  `blocking_count` in the JSON.
+- **Statement fingerprints.** `asgi_profiler.sql_hash` and `normalise_sql`
+  give a statement a stable identity across executions.
+- A **"With findings only"** filter on the request list.
+- New options: `detectors`, `n_plus_one_count`, `n_plus_one_ms`,
+  `slow_query_issue_ms`, `blocking_query_ms`.
+- New exports: `Problem`, `detect`, `DetectorSettings`, `DETECTOR_TYPES`,
+  `sql_hash`, `normalise_sql`.
+- A [Findings](https://asgi-profiler.netlify.app/guide/detectors/)
+  documentation page.
+
+### Changed
+
+- **Statements are grouped by a normalised fingerprint, not by literal text.**
+  `IN (1, 2)` and `IN (1, 2, 3)` are one statement, as are `SAVEPOINT sa_1`
+  and `SAVEPOINT sa_2`, and any statement differing only in a quoted string,
+  a number or a boolean. Identifiers are left alone — double-quoted names
+  survive, and `users_2024` is not `users_%s`. This affects the duplicate
+  count, the per-request grouping and the statements page, all of which
+  previously fragmented on exactly the cases that matter.
+- The request list no longer labels any repetition `N+1 ×n`. A request with a
+  finding shows what was found; repetition below the thresholds shows
+  `repeats ×n`, which is what it is.
+- `Profile.finalise()` no longer fills `problems` — the middleware does,
+  after it, because detectors need configured thresholds and a dataclass
+  should not reach for configuration.
+
+### Migration
+
+- **The SQLite schema is version 2.** An existing capture file is refused with
+  the message it already had; re-capture with this version. Two new columns on
+  `profiles` (`problems`, `problem_count`, `blocking_count`) and one on
+  `statements` (`sql_hash`).
+- Nothing in the Python API was removed or renamed.
+
+### Notes on the thresholds
+
+`n_plus_one_ms` and `blocking_query_ms` default to **zero**, which is a
+deliberate departure from the production-tuned equivalents in tools like
+Sentry. In development the table has twelve rows, so five hundred repeated
+queries return in four milliseconds — a duration floor tuned for production
+data filters out precisely the findings there is still time to act on. Raise
+them when profiling against a production-sized database.
+
 ## [0.2.0] - 2026-09-13
 
 Choosing what gets profiled, and somewhere else to look at it.
