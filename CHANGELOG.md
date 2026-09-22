@@ -74,15 +74,6 @@ reporting problems.
   `statements` (`sql_hash`).
 - Nothing in the Python API was removed or renamed.
 
-### Notes on the thresholds
-
-`n_plus_one_ms` and `blocking_query_ms` default to **zero**, which is a
-deliberate departure from the production-tuned equivalents in tools like
-Sentry. In development the table has twelve rows, so five hundred repeated
-queries return in four milliseconds — a duration floor tuned for production
-data filters out precisely the findings there is still time to act on. Raise
-them when profiling against a production-sized database.
-
 ## [0.2.0] - 2026-09-13
 
 Choosing what gets profiled, and somewhere else to look at it.
